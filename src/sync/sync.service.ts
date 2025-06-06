@@ -4,6 +4,25 @@ import pgStructure, { Schema } from "pg-structure";
 
 @Injectable()
 export class SyncService {
+  async attemptConnection(
+    connectionString: string,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    try {
+      await pgStructure({
+        connectionString,
+        ssl: { rejectUnauthorized: false },
+      });
+      return { ok: true };
+    } catch (err) {
+      const errorMessage = err.message || "Unknown error";
+      const trimmedMessage = errorMessage.replace(
+        "pg-structure cannot connect to the database: ",
+        "",
+      );
+      return { ok: false, error: trimmedMessage };
+    }
+  }
+
   async generateEnumSQLs(connectionString: string): Promise<string> {
     const db = await pgStructure({
       connectionString,

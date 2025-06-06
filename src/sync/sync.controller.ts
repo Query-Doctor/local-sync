@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Post } from "@nestjs/common";
 import { SyncService } from "./sync.service";
 
 @Controller("sync")
@@ -7,6 +7,14 @@ export class SyncController {
 
   @Post()
   async generateStructure(@Body() body: { connectionString: string }) {
+    const connection = await this.syncService.attemptConnection(
+      body.connectionString,
+    );
+
+    if (!connection.ok) {
+      return new BadRequestException(connection.error);
+    }
+
     let commands = "";
     try {
       commands += await this.syncService.generateEnumSQLs(
