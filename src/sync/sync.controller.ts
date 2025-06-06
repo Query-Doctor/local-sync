@@ -15,18 +15,18 @@ export class SyncController {
       return new BadRequestException(connection.error);
     }
 
+    const { db, pool } = connection;
+
     let commands = "";
     try {
-      commands += await this.syncService.generateEnumSQLs(
-        body.connectionString,
-      );
-      commands += await this.syncService.generateCreateTablesAndIndexesSQL(
-        body.connectionString,
-      );
-      commands += await this.syncService.getSampleData(body.connectionString);
-      commands += await this.syncService.getStats(body.connectionString);
+      commands += await this.syncService.generateEnumSQLs(db);
+      commands += await this.syncService.generateCreateTablesAndIndexesSQL(db);
+      commands += await this.syncService.getSampleData(pool);
+      commands += await this.syncService.getStats(pool);
     } catch (error) {
       console.error(error);
+    } finally {
+      if (pool) await pool.end();
     }
 
     return { success: true, data: { commands: commands } };

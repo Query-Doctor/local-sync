@@ -1,18 +1,26 @@
 import { Injectable } from "@nestjs/common";
 import pg from "pg";
-import pgStructure, { Schema } from "pg-structure";
+import pgStructure, { Schema, Db } from "pg-structure";
 
 @Injectable()
 export class SyncService {
   async attemptConnection(
     connectionString: string,
-  ): Promise<{ ok: true } | { ok: false; error: string }> {
+  ): Promise<
+    { ok: true; db: Db; pool: pg.Pool } | { ok: false; error: string }
+  > {
     try {
-      await pgStructure({
+      const db = await pgStructure({
         connectionString,
         ssl: { rejectUnauthorized: false },
       });
-      return { ok: true };
+
+      const pool = new pg.Pool({
+        connectionString,
+        ssl: { rejectUnauthorized: false },
+      });
+
+      return { ok: true, db, pool };
     } catch (err) {
       const errorMessage = err.message || "Unknown error";
       const trimmedMessage = errorMessage.replace(
@@ -23,14 +31,7 @@ export class SyncService {
     }
   }
 
-  async generateEnumSQLs(connectionString: string): Promise<string> {
-    const db = await pgStructure({
-      connectionString,
-      ssl: { rejectUnauthorized: false },
-    }).catch((err) => {
-      console.error("Error connecting to database:", err);
-      throw new Error("Failed to connect to the database.");
-    });
+  async generateEnumSQLs(db: Db): Promise<string> {
     const enumSQLs: string[] = [];
 
     for (const type of db.types.values()) {
@@ -48,16 +49,7 @@ export class SyncService {
     return enumSQLs.join("\n\n");
   }
 
-  async generateCreateTablesAndIndexesSQL(
-    connectionString: string,
-  ): Promise<string> {
-    const db = await pgStructure({
-      connectionString,
-      ssl: { rejectUnauthorized: false },
-    }).catch((err) => {
-      console.error("Error connecting to database:", err);
-      throw new Error("Failed to connect to the database.");
-    });
+  async generateCreateTablesAndIndexesSQL(db: Db): Promise<string> {
     const commands: string[] = [];
     const publicSchema = db.get("public") as Schema;
     const tables = publicSchema.tables;
@@ -123,22 +115,16 @@ export class SyncService {
     return commands.join("\n\n");
   }
 
-  async getSampleData(connectionString: string): Promise<string> {
+  async getSampleData(pool: pg.Pool): Promise<string> {
     let updateCommands = "\n\n";
     try {
-      const { Pool } = pg;
-      const sourceDb = new Pool({
-        connectionString,
-        ssl: { rejectUnauthorized: false },
-      });
-
-      const result = await sourceDb.query(
+      const result = await pool.query(
         "select relname from pg_class c join pg_namespace n on n.oid = relnamespace where relkind = 'r' and nspname = 'public'",
       );
       const rows = result.rows;
 
       for (const row of rows) {
-        const sampleRecords = await sourceDb.query(
+        const sampleRecords = await pool.query(
           `select * from ${row.relname} limit 10`,
         );
         for (const record of sampleRecords.rows) {
@@ -166,16 +152,10 @@ export class SyncService {
     return updateCommands;
   }
 
-  async getStats(connectionString: string): Promise<string> {
+  async getStats(pool: pg.Pool): Promise<string> {
     let updateCommands = "\n\n";
     try {
-      const { Pool } = pg;
-      const sourceDb = new Pool({
-        connectionString: connectionString,
-        ssl: { rejectUnauthorized: false },
-      });
-
-      const result = await sourceDb.query(
+      const result = await pool.query(
         "select relname, reltuples::bigint from pg_class c join pg_namespace n on n.oid = relnamespace where relkind = 'r' and nspname = 'public'",
       );
       const rows = result.rows;
