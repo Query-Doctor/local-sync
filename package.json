@@ -1,10 +1,12 @@
 {
   "name": "query-doctor-local-sync",
   "version": "0.0.1",
-  "private": true,
-  "description": "",
+  "description": "A tool to generate SQL commands for syncing PostgreSQL database structures",
   "license": "UNLICENSED",
   "author": "",
+  "bin": {
+    "query-doctor-local-sync": "./dist/cli.js"
+  },
   "scripts": {
     "build": "tsc --noEmit && nest build -b swc && npm run sentry:sourcemaps",
     "dev": "TS_NODE_BASEURL=./dist nest start -b swc --watch --exec 'node -r tsconfig-paths/register ./dist/main.js'",
