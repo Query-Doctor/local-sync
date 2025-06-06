@@ -96,7 +96,7 @@ export class SyncService {
       );
 
       // CREATE INDEX statements
-      const indexSQLs = [];
+      const indexSQLs: string[] = [];
 
       for (const index of table.indexes.values()) {
         if (index.isPrimaryKey) continue; // already added as PRIMARY KEY
