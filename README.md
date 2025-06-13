@@ -1,42 +1,12 @@
-# Query Doctor Local Sync
+# Sync
 
-This is a helper application to be used by https://querydoctor.com's Index Ray. It is meant to be ran locally. 
+A tool for dumping the schema of a database with minimal permissions.
+Used at https://app.querydoctor.com to keep user databases in sync with the local pglite instance
 
-It is used to extract metadata from a local PostgresSQL database.
+You can play around with a hosted version of this tool
+https://sync.querydoctor.com/postgres/all?db=postgres://user:password@host:port/database
 
-We retrieve:
-- SQL commands for enum types
-- SQL commands for tables and indexes
-- sample data (trimmed to 10 rows)
-- statistics
+## Setup
 
-## Usage
-
-You don't need to install this package locally. You can run it directly using `npx`::
-
-```bash
-npx query-doctor-local-sync
-```
-
-This will start the application on port 7777 by default.
-
-## Options
-
-- `--port` or `-p`: Specify the port to run the application (default: 7777)
-- `--help` or `-h`: Display help information
-
-Example:
-
-```bash
-npx query-doctor-local-sync --port 8080
-```
-
-## Prerequisites
-
-Ensure you have Node.js installed on your machine. You can check this by running:
-
-```bash
-node -v
-```
-
-If you don't have Node.js installed, you can download it from [nodejs.org](https://nodejs.org/). Alternatively, you can use a version manager like [nvm](https://github.com/nvm-sh/nvm) or [nvm for windows](https://github.com/coreybutler/nvm-windows).
+- [Install deno](https://docs.deno.com/runtime/getting_started/installation/)
+- `PG_DUMP_BINARY=$(which pg_dump) deno run `
