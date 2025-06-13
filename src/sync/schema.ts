@@ -1,0 +1,106 @@
+import postgres from "npm:postgres";
+import { SpanStatusCode, trace } from "npm:@opentelemetry/api";
+import { log } from "../log.ts";
+
+export type TableStats = {
+  name: string;
+};
+
+export class PostgresSchemaLink {
+  private readonly PG_DUMP_VERSION = "17.2";
+  private readonly pgDumpBinaryPath: string;
+  constructor(
+    public readonly sql: postgres.Sql,
+    public readonly url: string,
+    public readonly schema: string
+  ) {
+    this.pgDumpBinaryPath = this.findPgDumpBinary();
+    // sql.listen("ddl_events", (f) => {
+    //   const data = JSON.parse(f);
+    //   // {"tag" : "ALTER TABLE", "command" : "ALTER TABLE", "object_type" : "table", "schema" : "public", "identity" : "public.books", "in_extension" : false}
+    //   log.info(`(${data.identity}) Schema change detected`, "schema:sync");
+    //   this.syncSchema();
+    // });
+  }
+
+  static fromUrl(url: string, schema: string = "public"): PostgresSchemaLink {
+    const sql = postgres(url);
+    return new PostgresSchemaLink(sql, url, schema);
+  }
+
+  findPgDumpBinary(): string {
+    const forcePath = Deno.env.get("PG_DUMP_BINARY");
+    if (forcePath) {
+      log.info(
+        `Using pg_dump binary from env(PG_DUMP_BINARY): ${forcePath}`,
+        "schema:setup"
+      );
+      return forcePath;
+    }
+    const os = Deno.build.os;
+    const arch = Deno.build.arch;
+    const shippedPath = `./bin/pg_dump-${this.PG_DUMP_VERSION}/pg_dump.${os}-${arch}`;
+    if (!Deno.statSync(shippedPath).isFile) {
+      throw new Error(`pg_dump binary not found at ${shippedPath}`);
+    }
+    log.info(`Using built-in "pg_dump" binary: ${shippedPath}`, "schema:setup");
+    return shippedPath;
+  }
+
+  async syncSchema(): Promise<string> {
+    log.debug("Syncing schema", "schema:sync");
+    const decoder = new TextDecoder();
+    // const [dumping, omits] = await this.omitBigBois();
+    const args = [
+      // the owner doesn't exist
+      "--no-owner",
+      // privileges don't exist
+      "--no-privileges",
+      "--schema-only",
+      this.url,
+    ];
+    log.debug(
+      `Dumping schema with pg_dump using args: ${args.join(" ")}`,
+      "schema:sync"
+    );
+    const span = trace.getActiveSpan();
+    span?.addEvent("sync:start");
+    const command = new Deno.Command(this.pgDumpBinaryPath, {
+      args,
+      stdout: "piped",
+      stderr: "piped",
+    });
+    const output = await command.output();
+    span?.addEvent("sync:end");
+    span?.setAttribute("outputBytes", output.stdout.byteLength);
+    if (output.stderr.byteLength > 0) {
+      const stderr = decoder.decode(output.stderr);
+      span?.setStatus({ code: SpanStatusCode.ERROR, message: stderr });
+      log.error(`Error: ${stderr}`, "schema:sync");
+      throw new Error(stderr);
+    } else {
+      log.info(
+        `Dumped schema. bytes=${output.stdout.byteLength}`,
+        "schema:sync"
+      );
+      const stdout = decoder.decode(output.stdout);
+      return stdout;
+    }
+  }
+
+  // async omitBigBois(): Promise<[TableCount[], TableCount[]]> {
+  //   const result: TableCount[] = await this.sql`SELECT
+  //         relname as "tableName",
+  //         n_live_tup as count
+  //     FROM pg_stat_user_tables
+  //     WHERE schemaname = 'public'
+  //     ORDER BY n_live_tup DESC;`;
+  //   return partition(
+  //     result.map((row) => ({
+  //       tableName: row.tableName,
+  //       count: Number(row.count),
+  //     })),
+  //     (row) => row.count < 25
+  //   );
+  // }
+}
