@@ -6,8 +6,6 @@ import { json } from "node:stream/consumers";
 import { SyncRequest } from "./sync.dto.ts";
 import { ZodError } from "zod/v4";
 
-const MAX_ROWS_UPPER_BOUND = 100;
-
 const syncer = new PostgresSyncer();
 
 async function onSync(req: Request) {

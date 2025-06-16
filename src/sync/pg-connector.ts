@@ -159,12 +159,12 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
       .map((key, i) => `${doubleQuote(key)} = $${i + 1}`)
       .join(" AND ");
     const sqlString = `select *, ctid from ${doubleQuote(
-      table,
+      table
     )} where ${columnsText} limit 1`;
     const params = Object.values(values);
     const data = await this.sql.unsafe(
       sqlString,
-      params as ParameterOrJSON<never>[],
+      params as ParameterOrJSON<never>[]
     );
     if (data.length === 0) {
       return undefined;
@@ -189,12 +189,12 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
    */
   async *cursor(
     table: string,
-    options: CursorOptions,
+    options: CursorOptions
   ): AsyncGenerator<PostgresTuple, void, unknown> {
     const tupleEstimate = this.tupleEstimates.get(table);
     if (tupleEstimate === undefined) {
       console.warn(
-        `No tuple estimate for ${table}. Falling back to slow query. Is the db vacuum analyzed?`,
+        `No tuple estimate for ${table}. Falling back to slow query. Is the db vacuum analyzed?`
       );
     }
     let cursor: AsyncIterable<
@@ -217,7 +217,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
         .unsafe(
           `select *, ctid from ${table} tablesample bernoulli(${
             options.requiredRows / tupleEstimate + 10
-          }) repeatable(1)`,
+          }) repeatable(1)`
         )
         .cursor(1);
     }
@@ -225,7 +225,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
       if (value === undefined) {
         log.error(
           `Cursor for table ${table} returned an undefined value`,
-          "pg-connector:cursor",
+          "pg-connector:cursor"
         );
         continue;
       }
@@ -243,7 +243,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
   async serialize(
     schemaName: string,
     tables: TableRows<Row>,
-    options: DependencyAnalyzerOptions,
+    options: DependencyAnalyzerOptions
   ): Promise<SerializeResult> {
     const schema = await this.getSchema(schemaName);
     const mkKey = (table: string, column: string) =>
@@ -257,7 +257,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
     const comments = [
       `-- START:Sampled data`,
       `-- Sampled by @query-doctor/sync on ${new Date().toISOString()} | options = ${JSON.stringify(
-        options,
+        options
       )}`,
       "--",
       "-- Note: Using session_replication_role to prevent foreign key constraints from being checked.",
@@ -286,12 +286,12 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
       }
       const columns = tableSchema.columns.map((c) => c.columnName);
       const quotes = columns.map(
-        (c) => `quote_literal(${doubleQuote(c)}) as ${doubleQuote(c)}`,
+        (c) => `quote_literal(${doubleQuote(c)}) as ${doubleQuote(c)}`
       );
       const query = `select ${quotes.join(
-        ",\n  ",
+        ",\n  "
       )} from (select * from ${doubleQuote(
-        table,
+        table
       )} where ctid = any($1::tid[]))`;
       const serialized = await this.sql.unsafe(query, [allCtids]);
 
@@ -300,7 +300,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
         serialized.length
       } sampled out of ${estimate.toLocaleString()} (estimate)`;
       const insertStatement = `${comment}\nINSERT INTO ${schemaName}.${doubleQuote(
-        table,
+        table
       )} (${tableSchema.columns
         .map((c) => doubleQuote(c.columnName))
         .join(", ")}) VALUES\n`;
@@ -319,7 +319,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
               }
               return value;
             })
-            .join(", ")})`,
+            .join(", ")})`
         );
       }
       out += `${insertStatement}  ${serializedRows.join(",\n  ")};\n\n`;
@@ -327,7 +327,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
     }
     log.info(
       `Serialized ${Object.keys(tables).length} tables`,
-      "pg-connector:serialize",
+      "pg-connector:serialize"
     );
     out += `-- END:Sampled data\nSET session_replication_role = 'origin';\n\n`;
     return {

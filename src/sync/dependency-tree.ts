@@ -3,18 +3,18 @@ import { log } from "../log.ts";
 export type Dependency =
   // a source table with dependencies
   | {
-      sourceTable: string;
-      sourceColumn: string[];
-      referencedTable: string;
-      referencedColumn: string[];
-    }
+    sourceTable: string;
+    sourceColumn: string[];
+    referencedTable: string;
+    referencedColumn: string[];
+  }
   // a source table with no dependencies
   | {
-      sourceTable: string;
-      sourceColumn: null;
-      referencedTable: null;
-      referencedColumn: null;
-    };
+    sourceTable: string;
+    sourceColumn: null;
+    referencedTable: null;
+    referencedColumn: null;
+  };
 
 /** A pointer from a current table context to another */
 interface Pointer {
@@ -51,23 +51,23 @@ export type TableRows<
 
 export type FindAllDependenciesError =
   | {
-      kind: "error";
-      type: "unexpected_error";
-      error: Error;
-    }
+    kind: "error";
+    type: "unexpected_error";
+    error: Error;
+  }
   | {
-      kind: "error";
-      type: "max_table_iterations_reached";
-    };
+    kind: "error";
+    type: "max_table_iterations_reached";
+  };
 
 export type FindAllDependenciesResult<
   T extends Record<string, unknown> = Record<string, unknown>,
 > =
   | {
-      kind: "ok";
-      items: TableRows<T>;
-      notices: DependencyResolutionNotice[];
-    }
+    kind: "ok";
+    items: TableRows<T>;
+    notices: DependencyResolutionNotice[];
+  }
   | FindAllDependenciesError;
 
 export type CursorOptions = { requiredRows: number; seed: number };
@@ -148,7 +148,9 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
       const removeTable = (i: number) => {
         if (remainingTables[i] === undefined) {
           log.error(
-            `Attempted to remove table ${remainingTables[i]} but it was not found`,
+            `Attempted to remove table ${
+              remainingTables[i]
+            } but it was not found`,
             "dependency-resolution",
           );
           return;
@@ -263,9 +265,11 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
         }
       }
       log.info(
-        `Found ${Object.keys(items).length} tables with ${Object.values(
-          items,
-        ).reduce((acc, table) => acc + table.length, 0)} rows`,
+        `Found ${Object.keys(items).length} tables with ${
+          Object.values(
+            items,
+          ).reduce((acc, table) => acc + table.length, 0)
+        } rows`,
         "dependency-resolution",
       );
       return { kind: "ok", items, notices };

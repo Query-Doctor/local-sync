@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import { sanitizePostgresUrl } from "./sanitize.ts";
 
 export const log = {

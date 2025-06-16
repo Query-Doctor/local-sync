@@ -1,12 +1,12 @@
 import { assertEquals } from "@std/assert";
 import {
-  DependencyAnalyzer,
   DatabaseConnector,
+  DependencyAnalyzer,
   type Hash,
 } from "../src/sync/dependency-tree.ts";
 
 function testDb(): DatabaseConnector<{
-  data: { [key: string]: any; id: number };
+  data: { [key: string]: unknown; id: number };
   table: string;
 }> {
   const db = {
@@ -22,8 +22,8 @@ function testDb(): DatabaseConnector<{
         yield { data: row, table };
       }
     },
-    async dependencies() {
-      return [
+    dependencies() {
+      return Promise.resolve([
         {
           sourceTable: "posts",
           sourceColumn: ["poster_id"],
@@ -36,18 +36,18 @@ function testDb(): DatabaseConnector<{
           referencedTable: null,
           referencedColumn: null,
         },
-      ];
+      ]);
     },
-    async get(table, values) {
+    get(table, values) {
       const found = db[table as keyof typeof db].find((row) => {
         for (const [key, value] of Object.entries(values)) {
           if (row[key as keyof typeof row] !== value) {
             return false;
           }
         }
-        return true;
+        return Promise.resolve(true);
       });
-      return found ? { data: found, table } : undefined;
+      return Promise.resolve(found ? { data: found, table } : undefined);
     },
     hash(db) {
       return db.data.id.toString() as Hash;

@@ -12,7 +12,7 @@ export class PostgresSchemaLink {
   constructor(
     public readonly sql: postgres.Sql,
     public readonly url: string,
-    public readonly schema: string
+    public readonly schema: string,
   ) {
     this.pgDumpBinaryPath = this.findPgDumpBinary();
     // sql.listen("ddl_events", (f) => {
@@ -33,13 +33,14 @@ export class PostgresSchemaLink {
     if (forcePath) {
       log.info(
         `Using pg_dump binary from env(PG_DUMP_BINARY): ${forcePath}`,
-        "schema:setup"
+        "schema:setup",
       );
       return forcePath;
     }
     const os = Deno.build.os;
     const arch = Deno.build.arch;
-    const shippedPath = `./bin/pg_dump-${this.PG_DUMP_VERSION}/pg_dump.${os}-${arch}`;
+    const shippedPath =
+      `./bin/pg_dump-${this.PG_DUMP_VERSION}/pg_dump.${os}-${arch}`;
     if (!Deno.statSync(shippedPath).isFile) {
       throw new Error(`pg_dump binary not found at ${shippedPath}`);
     }
@@ -61,7 +62,7 @@ export class PostgresSchemaLink {
     ];
     log.debug(
       `Dumping schema with pg_dump using args: ${args.join(" ")}`,
-      "schema:sync"
+      "schema:sync",
     );
     const span = trace.getActiveSpan();
     span?.addEvent("sync:start");
@@ -81,7 +82,7 @@ export class PostgresSchemaLink {
     } else {
       log.info(
         `Dumped schema. bytes=${output.stdout.byteLength}`,
-        "schema:sync"
+        "schema:sync",
       );
       const stdout = decoder.decode(output.stdout);
       return stdout;

@@ -16,5 +16,9 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitAny": true
+  },
+  "fmt": {
+    "singleQuote": false,
+    "trailingCommas": "onlyMultiLine"
   }
 }

@@ -1,9 +1,9 @@
 import postgres from "npm:postgres";
 import {
   DependencyAnalyzer,
+  type DependencyAnalyzerOptions,
   DependencyResolutionNotice,
   FindAllDependenciesError,
-  type DependencyAnalyzerOptions,
 } from "./dependency-tree.ts";
 import {
   PostgresConnector,
@@ -37,31 +37,31 @@ export type SyncNotice = DependencyResolutionNotice | PostgresSuperuserError;
 
 type RecentQueries =
   | {
-      kind: "ok";
-      results: RecentQuery[];
-    }
+    kind: "ok";
+    results: RecentQuery[];
+  }
   | {
-      kind: "error";
-      type: "postgres_error";
-      error: string;
-    }
+    kind: "error";
+    type: "postgres_error";
+    error: string;
+  }
   | {
-      kind: "error";
-      type: "extension_not_installed";
-      extensionName: string;
-    };
+    kind: "error";
+    type: "extension_not_installed";
+    extensionName: string;
+  };
 
 export type SyncResult =
   | {
-      kind: "ok";
-      versionNum: string;
-      version: string;
-      setup: string;
-      sampledRecords: Record<string, number>;
-      notices: SyncNotice[];
-      queries: RecentQueries;
-      metadata: TableMetadata[];
-    }
+    kind: "ok";
+    versionNum: string;
+    version: string;
+    setup: string;
+    sampledRecords: Record<string, number>;
+    notices: SyncNotice[];
+    queries: RecentQueries;
+    metadata: TableMetadata[];
+  }
   | PostgresConnectionError
   | PostgresError
   | FindAllDependenciesError;
@@ -78,8 +78,7 @@ export class PostgresSyncer {
     // we don't want to allow localhost access for hosted sync instances
     // to prevent users from connecting to our hosted db
     // (even though all our dbs should should be password protected)
-    const isLocalhost =
-      url.hostname === "localhost" ||
+    const isLocalhost = url.hostname === "localhost" ||
       // ipv4 localhost
       /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(url.hostname) ||
       // ipv6 localhost
@@ -104,12 +103,11 @@ export class PostgresSyncer {
     } catch (err) {
       // dual stack networking (ipv4/ipv6) really screws us here because
       // it throws an AggregateError which is annoying to catch
-      const error =
-        err instanceof AggregateError
-          ? (err.errors[0] as Error)
-          : err instanceof Error
-          ? err
-          : new Error("Unknown error");
+      const error = err instanceof AggregateError
+        ? (err.errors[0] as Error)
+        : err instanceof Error
+        ? err
+        : new Error("Unknown error");
       return {
         kind: "error",
         type: "postgres_connection_error",
@@ -136,10 +134,9 @@ export class PostgresSyncer {
           if (deps.kind !== "ok") {
             span.setStatus({
               code: SpanStatusCode.ERROR,
-              message:
-                deps.type === "unexpected_error"
-                  ? deps.error.message
-                  : deps.type,
+              message: deps.type === "unexpected_error"
+                ? deps.error.message
+                : deps.type,
             });
           }
           return deps;

@@ -9,7 +9,7 @@ export const sync = new RateLimiter({
 
 export function appendHeaders(
   res: Response,
-  result: RateLimitResult
+  result: RateLimitResult,
 ): Response {
   res.headers.set("X-RateLimit-Limit", result.limit.toString());
   res.headers.set("X-RateLimit-Window", "15m");
