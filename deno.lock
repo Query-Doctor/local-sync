@@ -2,23 +2,22 @@
   "version": "5",
   "specifiers": {
     "jsr:@rabbit-company/rate-limiter@*": "3.0.0",
-    "jsr:@std/assert@1": "1.0.11",
+    "jsr:@std/assert@^1.0.13": "1.0.13",
     "jsr:@std/bytes@^1.0.5": "1.0.5",
     "jsr:@std/collections@*": "1.0.10",
-    "jsr:@std/internal@^1.0.5": "1.0.5",
+    "jsr:@std/internal@^1.0.6": "1.0.8",
     "jsr:@std/io@*": "0.225.2",
     "npm:@opentelemetry/api@*": "1.9.0",
     "npm:@types/node@*": "22.5.4",
     "npm:postgres@*": "3.4.5",
-    "npm:zod@*": "3.25.64",
-    "npm:zod@^3.25.64": "3.25.64"
+    "npm:zod@^3.25.65": "3.25.65"
   },
   "jsr": {
     "@rabbit-company/rate-limiter@3.0.0": {
       "integrity": "7cb13dea09da7cfa93476ded4ee8acd893689400ddd955219c0f3f8f911cff52"
     },
-    "@std/assert@1.0.11": {
-      "integrity": "2461ef3c368fe88bc60e186e7744a93112f16fd110022e113a0849e94d1c83c1",
+    "@std/assert@1.0.13": {
+      "integrity": "ae0d31e41919b12c656c742b22522c32fb26ed0cba32975cb0de2a273cb68b29",
       "dependencies": [
         "jsr:@std/internal"
       ]
@@ -29,8 +28,8 @@
     "@std/collections@1.0.10": {
       "integrity": "903af106a3d92970d74e20f7ebff77d9658af9bef4403f1dc42a7801c0575899"
     },
-    "@std/internal@1.0.5": {
-      "integrity": "54a546004f769c1ac9e025abd15a76b6671ddc9687e2313b67376125650dc7ba"
+    "@std/internal@1.0.8": {
+      "integrity": "fc66e846d8d38a47cffd274d80d2ca3f0de71040f855783724bb6b87f60891f5"
     },
     "@std/io@0.225.2": {
       "integrity": "3c740cd4ee4c082e6cfc86458f47e2ab7cb353dc6234d5e9b1f91a2de5f4d6c7",
@@ -55,8 +54,8 @@
     "undici-types@6.19.8": {
       "integrity": "sha512-ve2KP6f/JnbPBFyobGHuerC9g1FYGn/F8n1LWTwNxCEzd6IfqTwUQcNXgEtmmQ6DlRrC1hrSrBnCZPokRrDHjw=="
     },
-    "zod@3.25.64": {
-      "integrity": "sha512-hbP9FpSZf7pkS7hRVUrOjhwKJNyampPgtXKc3AN6DsWtoHsg2Sb4SQaS4Tcay380zSwd2VPo9G9180emBACp5g=="
+    "zod@3.25.65": {
+      "integrity": "sha512-kMyE2qsXK1p+TAvO7zsf5wMFiCejU3obrUDs9bR1q5CBKykfvp7QhhXrycUylMoOow0iEUSyjLlZZdCsHwSldQ=="
     }
   },
   "redirects": {
@@ -283,8 +282,8 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@std/assert@1",
-      "npm:zod@^3.25.64"
+      "jsr:@std/assert@^1.0.13",
+      "npm:zod@^3.25.65"
     ]
   }
 }
