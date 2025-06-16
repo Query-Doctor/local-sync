@@ -1,4 +1,4 @@
-import postgres, { type ParameterOrJSON } from "npm:postgres";
+import postgres, { type ParameterOrJSON } from "postgres";
 import type {
   CursorOptions,
   DatabaseConnector,

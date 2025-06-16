@@ -1,8 +1,7 @@
-import { SpanStatusCode, trace } from "npm:@opentelemetry/api";
+import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { PostgresSyncer } from "../sync/syncer.ts";
 import { log } from "../log.ts";
 import * as limiter from "./rate-limit.ts";
-import { json } from "node:stream/consumers";
 import { SyncRequest } from "./sync.dto.ts";
 import { ZodError } from "zod/v4";
 
@@ -16,9 +15,9 @@ async function onSync(req: Request) {
     return new Response("Missing body", { status: 400 });
   }
   let body: SyncRequest;
-  const bodyString = await json(req.body);
+  const bodyString = await req.text();
   try {
-    body = SyncRequest.parse(bodyString);
+    body = SyncRequest.parse(JSON.parse(bodyString));
   } catch (e: unknown) {
     console.log(e);
     if (e instanceof ZodError) {
@@ -31,13 +30,13 @@ async function onSync(req: Request) {
   if (requiredRows > maxRows) {
     log.warn(
       `Notice: \`requiredRows\` (${requiredRows}) is greater than \`maxRows\` (${maxRows})`,
-      "http:sync",
+      "http:sync"
     );
   }
   if (maxRows < requiredRows + 2) {
     log.warn(
       `Notice: \`maxRows\` (${maxRows}) is too low. This might cause problems with foreign keys`,
-      "http:sync",
+      "http:sync"
     );
   }
   span?.setAttribute("requiredRows", requiredRows);
@@ -50,7 +49,7 @@ async function onSync(req: Request) {
     if (e instanceof Error) {
       return Response.json(
         { kind: "error", type: "invalid_db_url", error: e.message },
-        { status: 400 },
+        { status: 400 }
       );
     }
     return new Response("Invalid db url", { status: 400 });
@@ -74,7 +73,7 @@ async function onSync(req: Request) {
         },
         {
           status: 500,
-        },
+        }
       );
     } else if (result.type === "postgres_connection_error") {
       console.log(result);
@@ -85,7 +84,7 @@ async function onSync(req: Request) {
           type: "postgres_connection_error",
           error: result.error.message,
         },
-        { status: 500 },
+        { status: 500 }
       );
     } else if (result.type === "postgres_error") {
       log.error(result.error.message, "http:sync");
@@ -95,7 +94,7 @@ async function onSync(req: Request) {
           type: "postgres_error",
           error: result.error.message,
         },
-        { status: 500 },
+        { status: 500 }
       );
     }
     return new Response("Internal Server Error", { status: 500 });
@@ -114,37 +113,34 @@ export function createServer(port: number) {
     if (limit.limited) {
       return limiter.appendHeaders(
         new Response("Rate limit exceeded", { status: 429 }),
-        limit,
+        limit
       );
     }
     if (url.pathname === "/postgres/all") {
       if (req.method === "OPTIONS") {
         return new Response("OK", {
           status: 200,
-          headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "POST",
-            "Access-Control-Allow-Headers": "Content-Type",
-            "Access-Control-Expose-Headers":
-              "Content-Type, X-Rate-Limit-Limit, X-Rate-Limit-Remaining, X-Rate-Limit-Reset",
-          },
+          headers: corsHeaders,
         });
       }
       if (req.method !== "POST") {
         return new Response("Method not allowed", { status: 405 });
       }
       const res = await onSync(req);
-      res.headers.set("Access-Control-Allow-Origin", "*");
-      res.headers.set("Access-Control-Allow-Methods", "POST");
-      res.headers.set("Access-Control-Allow-Headers", "Content-Type");
-      res.headers.set(
-        "Access-Control-Expose-Headers",
-        "Content-Type, X-Rate-Limit-Limit, X-Rate-Limit-Remaining, X-Rate-Limit-Reset",
-      );
-      // res.headers.set("Access-Control-Allow-Credentials", "true");
+      for (const [key, value] of Object.entries(corsHeaders)) {
+        res.headers.set(key, value);
+      }
       limiter.appendHeaders(res, limit);
       return res;
     }
     return new Response("Not found", { status: 404 });
   });
 }
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Expose-Headers":
+    "Content-Type, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset",
+};

@@ -1,4 +1,4 @@
-import { z } from "npm:zod/v4";
+import { z } from "zod/v4";
 
 export const SyncRequest = z.object({
   db: z.string().startsWith("postgres://"),

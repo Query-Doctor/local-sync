@@ -1,10 +1,10 @@
-import { Span, SpanStatusCode, trace } from "npm:@opentelemetry/api";
+import { Span, SpanStatusCode, trace } from "@opentelemetry/api";
 
 export const tracer = trace.getTracer("sync", "0.0.1");
 
 export function withSpan<Args extends unknown[], T>(
   name: string,
-  cb: (span: Span, ...args: Args) => Promise<T>,
+  cb: (span: Span, ...args: Args) => Promise<T>
 ): (...args: Args) => Promise<T> {
   return (...args: Args) => {
     return tracer.startActiveSpan(name, async (span) => {

@@ -9,7 +9,10 @@
     "dev": "deno run --watch main.ts"
   },
   "imports": {
+    "@opentelemetry/api": "jsr:@opentelemetry/api@^1.9.0",
+    "@rabbit-company/rate-limiter": "jsr:@rabbit-company/rate-limiter@^3.0.0",
     "@std/assert": "jsr:@std/assert@^1.0.13",
+    "postgres": "npm:postgres@^3.4.7",
     "zod": "npm:zod@^3.25.65"
   },
   "compilerOptions": {

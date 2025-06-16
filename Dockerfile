@@ -18,9 +18,8 @@ RUN apt-get update && apt-get install -y wget lsb-release gnupg2 postgresql-clie
 RUN sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' \
     && wget -qO - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
 
-# Install pg_dump for PostgreSQL 16 and 17
+# Install pg_dump for PostgreSQL 17
 RUN apt-get update && apt-get install -y \
-    # postgresql-client-16 \
     postgresql-client-17 \
     && rm -rf /var/lib/apt/lists/*
 ENV PG_DUMP_BINARY=/bin/pg_dump
