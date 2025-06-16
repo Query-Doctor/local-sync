@@ -8,6 +8,14 @@ on:
   pull_request:
 
 jobs:
+  test:
+    name: Test postgres integrations
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v3
+      - name: Test postgres integration
+        run: |
+          deno run test:integration
   build:
     name: Build container
     env:
@@ -58,5 +66,3 @@ jobs:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
-
-          

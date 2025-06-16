@@ -6,7 +6,8 @@
     "sloppy-imports"
   ],
   "tasks": {
-    "dev": "deno run --watch main.ts"
+    "dev": "deno run --watch main.ts",
+    "test:integration": "deno test -A test/integration_test.ts"
   },
   "imports": {
     "@opentelemetry/api": "jsr:@opentelemetry/api@^1.9.0",

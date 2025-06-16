@@ -256,9 +256,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
     }
     const comments = [
       `-- START:Sampled data`,
-      `-- Sampled by @query-doctor/sync on ${new Date().toISOString()} | options = ${JSON.stringify(
-        options
-      )}`,
+      `-- Sampled by @query-doctor/sync | options = ${JSON.stringify(options)}`,
       "--",
       "-- Note: Using session_replication_role to prevent foreign key constraints from being checked.",
       "-- If adding new rows manually, you might want to put new insert statements after the sampled data.",
@@ -329,7 +327,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
       `Serialized ${Object.keys(tables).length} tables`,
       "pg-connector:serialize"
     );
-    out += `-- END:Sampled data\nSET session_replication_role = 'origin';\n\n`;
+    out += `-- END:Sampled data\nSET session_replication_role = 'origin';\n`;
     return {
       schema,
       serialized: out,
@@ -420,7 +418,6 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
         queries: results,
       };
     } catch (err) {
-      console.error(err);
       if (err instanceof Error) {
         if (
           err.message.includes('relation "pg_stat_statements" does not exist')
