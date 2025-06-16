@@ -4,7 +4,7 @@ WORKDIR /app
 COPY deno.json deno.lock .
 RUN deno install --frozen
 COPY . .
-RUN deno compile --allow-env --allow-run --allow-net --allow-read -o sync main.ts
+RUN deno compile --allow-env --allow-run --allow-net --allow-read --deny-sys -o sync main.ts
 
 FROM debian:12-slim
 
