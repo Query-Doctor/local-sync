@@ -128,11 +128,12 @@ export class PostgresSyncer {
           return connector.getRecentQueries();
         })(),
         withSpan("syncSchema", () => {
-          return link.syncSchema();
+          return link.syncSchema(schemaName);
         })(),
         withSpan("resolveDependencies", async (span) => {
           span.setAttribute("schemaName", schemaName);
           const deps = await analyzer.findAllDependencies(schemaName);
+          console.log(deps);
           if (deps.kind !== "ok") {
             span.setStatus({
               code: SpanStatusCode.ERROR,

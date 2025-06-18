@@ -8,6 +8,7 @@ import type {
   TableRows,
 } from "./dependency-tree.ts";
 import { log } from "../log.ts";
+import { trace } from "@opentelemetry/api";
 
 const ctidSymbol = Symbol("ctid");
 type Row = NonNullable<postgres.Row & Iterable<postgres.Row>> & {

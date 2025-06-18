@@ -47,15 +47,20 @@ export class PostgresSchemaLink {
     return shippedPath;
   }
 
-  async syncSchema(): Promise<string> {
+  async syncSchema(schemaName: string): Promise<string> {
     log.debug("Syncing schema", "schema:sync");
     const decoder = new TextDecoder();
     // const [dumping, omits] = await this.omitBigBois();
     const args = [
       // the owner doesn't exist
       "--no-owner",
+      // not needed most likely
+      "--no-comments",
       // privileges don't exist
       "--no-privileges",
+      // providers like supabase have a ton of stuff we don't need in other schemas
+      "--schema",
+      schemaName,
       "--schema-only",
       this.url,
     ];
@@ -70,22 +75,24 @@ export class PostgresSchemaLink {
       stdout: "piped",
       stderr: "piped",
     });
+    const start = Date.now();
     const output = await command.output();
-    span?.addEvent("sync:end");
+    const end = Date.now();
+    span?.addEvent("sync:end", end, start);
     span?.setAttribute("outputBytes", output.stdout.byteLength);
-    if (output.stderr.byteLength > 0) {
+    if (output.code !== 0) {
       const stderr = decoder.decode(output.stderr);
       span?.setStatus({ code: SpanStatusCode.ERROR, message: stderr });
       log.error(`Error: ${stderr}`, "schema:sync");
       throw new Error(stderr);
-    } else {
-      log.info(
-        `Dumped schema. bytes=${output.stdout.byteLength}`,
-        "schema:sync"
-      );
-      const stdout = decoder.decode(output.stdout);
-      return stdout;
     }
+    log.info(`Dumped schema. bytes=${output.stdout.byteLength}`, "schema:sync");
+    const stdout = decoder.decode(output.stdout);
+    return this.sanitizeSchema(stdout);
+  }
+
+  private sanitizeSchema(schema: string): string {
+    return schema.replace(/^CREATE SCHEMA\s./, "");
   }
 
   // async omitBigBois(): Promise<[TableCount[], TableCount[]]> {

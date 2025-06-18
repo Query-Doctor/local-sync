@@ -1,20 +1,21 @@
 import { log } from "../log.ts";
+import { tracer, withSpan } from "../otel.ts";
 
 export type Dependency =
   // a source table with dependencies
   | {
-    sourceTable: string;
-    sourceColumn: string[];
-    referencedTable: string;
-    referencedColumn: string[];
-  }
+      sourceTable: string;
+      sourceColumn: string[];
+      referencedTable: string;
+      referencedColumn: string[];
+    }
   // a source table with no dependencies
   | {
-    sourceTable: string;
-    sourceColumn: null;
-    referencedTable: null;
-    referencedColumn: null;
-  };
+      sourceTable: string;
+      sourceColumn: null;
+      referencedTable: null;
+      referencedColumn: null;
+    };
 
 /** A pointer from a current table context to another */
 interface Pointer {
@@ -46,34 +47,34 @@ export type DependencyResolutionNotice =
   | { kind: "too_few_rows"; table: string; requested: number; found: number };
 
 export type TableRows<
-  T extends Record<string, unknown> = Record<string, unknown>,
+  T extends Record<string, unknown> = Record<string, unknown>
 > = Record<TableName, T[]>;
 
 export type FindAllDependenciesError =
   | {
-    kind: "error";
-    type: "unexpected_error";
-    error: Error;
-  }
+      kind: "error";
+      type: "unexpected_error";
+      error: Error;
+    }
   | {
-    kind: "error";
-    type: "max_table_iterations_reached";
-  };
+      kind: "error";
+      type: "max_table_iterations_reached";
+    };
 
 export type FindAllDependenciesResult<
-  T extends Record<string, unknown> = Record<string, unknown>,
+  T extends Record<string, unknown> = Record<string, unknown>
 > =
   | {
-    kind: "ok";
-    items: TableRows<T>;
-    notices: DependencyResolutionNotice[];
-  }
+      kind: "ok";
+      items: TableRows<T>;
+      notices: DependencyResolutionNotice[];
+    }
   | FindAllDependenciesError;
 
 export type CursorOptions = { requiredRows: number; seed: number };
 
 export interface DatabaseConnector<
-  T extends InsertableTuple = InsertableTuple,
+  T extends InsertableTuple = InsertableTuple
 > {
   cursor(table: string, options: CursorOptions): Cursor<T>;
   dependencies(schema: string): Promise<Dependency[]>;
@@ -120,11 +121,11 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
   private static readonly MAX_TABLE_ITERATIONS = 100;
   constructor(
     private readonly connector: DatabaseConnector<T>,
-    private readonly options: DependencyAnalyzerOptions,
+    private readonly options: DependencyAnalyzerOptions
   ) {}
 
   async findAllDependencies(
-    schema: string,
+    schema: string
   ): Promise<FindAllDependenciesResult<T["data"]>> {
     log.debug("Starting dependency resolution", "dependency-resolution");
     this.seen.clear();
@@ -148,10 +149,8 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
       const removeTable = (i: number) => {
         if (remainingTables[i] === undefined) {
           log.error(
-            `Attempted to remove table ${
-              remainingTables[i]
-            } but it was not found`,
-            "dependency-resolution",
+            `Attempted to remove table ${remainingTables[i]} but it was not found`,
+            "dependency-resolution"
           );
           return;
         }
@@ -180,7 +179,7 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
           if (tableItems === undefined) {
             log.error(
               `Attempted to access table ${table} but it was not found in the items map`,
-              "dependency-resolution",
+              "dependency-resolution"
             );
             continue;
           }
@@ -201,7 +200,7 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
           if (iterator.done) {
             log.debug(
               `Notice: Table \`${table}\` has fewer rows (${tableItems.length}) than the required (${this.options.requiredRows})`,
-              "dependency-resolution",
+              "dependency-resolution"
             );
             notices.push({
               kind: "too_few_rows",
@@ -218,14 +217,14 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
           const results = await this.traverseDependencyChain(
             graph,
             table,
-            sourceValue,
+            sourceValue
           );
           for (const result of results) {
             const tableItems = items[result.table];
             if (tableItems === undefined) {
               log.error(
                 `Attempted to access table ${result.table} but it was not found in the items map`,
-                "dependency-resolution",
+                "dependency-resolution"
               );
               continue;
             }
@@ -238,7 +237,7 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
             if (chainExceedsMaxRows) {
               log.warn(
                 `Notice: Table \`${table}\` has more rows than the maximum ${this.options.maxRows}`,
-                "dependency-resolution",
+                "dependency-resolution"
               );
               notices.push({
                 kind: "incomplete_dependency_chain",
@@ -255,7 +254,7 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
             if (tableItems === undefined) {
               log.error(
                 `Attempted to access table ${table} but it was not found in the items map`,
-                "dependency-resolution",
+                "dependency-resolution"
               );
               continue;
             }
@@ -265,12 +264,10 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
         }
       }
       log.info(
-        `Found ${Object.keys(items).length} tables with ${
-          Object.values(
-            items,
-          ).reduce((acc, table) => acc + table.length, 0)
-        } rows`,
-        "dependency-resolution",
+        `Found ${Object.keys(items).length} tables with ${Object.values(
+          items
+        ).reduce((acc, table) => acc + table.length, 0)} rows`,
+        "dependency-resolution"
       );
       return { kind: "ok", items, notices };
     } catch (error) {
@@ -292,16 +289,16 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
   async traverseDependencyChain(
     graph: DependencyGraph,
     source: string,
-    value: T,
+    value: T
   ): Promise<T[]> {
     const table = graph.get(source);
     if (!table) {
       throw new Error(
-        `Table not declared in dependency graph. The graph should include a key for all existing tables in a database, even if they have no dependencies`,
+        `Table not declared in dependency graph. The graph should include a key for all existing tables in a database, even if they have no dependencies`
       );
     }
     function valuesFor(
-      pointer: Pointer,
+      pointer: Pointer
     ):
       | { ok: false; column: string[] }
       | { ok: true; params: Record<string, unknown> } {
@@ -331,11 +328,11 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
       }
       const referenced = await this.connector.get(
         dep.referencedTable,
-        values.params,
+        values.params
       );
       if (!referenced) {
         throw new Error(
-          `Found an existing FK requirement but there was no corresponding row in ${dep.referencedTable}. Is the database in a consistent state?`,
+          `Found an existing FK requirement but there was no corresponding row in ${dep.referencedTable}. Is the database in a consistent state?`
         );
       }
       const hashed = this.connector.hash(referenced);
@@ -347,7 +344,7 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
       const next = await this.traverseDependencyChain(
         graph,
         dep.referencedTable,
-        referenced,
+        referenced
       );
       results.push(...next);
     }
