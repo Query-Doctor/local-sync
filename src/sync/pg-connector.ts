@@ -292,7 +292,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
         ",\n  "
       )} from (select * from ${doubleQuote(
         table
-      )} where ctid = any($1::tid[]))`;
+      )} where ctid = any($1::tid[])) as samples`;
       const serialized = await this.sql.unsafe(query, [allCtids]);
 
       const estimate = this.tupleEstimates.get(table) ?? "?";
