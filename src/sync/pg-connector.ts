@@ -102,64 +102,71 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
    */
   async dependencies(schema: string) {
     const out = await this.sql<Dependency[]>`
+SELECT
+    quote_ident(pg_tables.schemaname)  as "sourceSchema",
+    quote_ident(pg_tables.tablename) AS "sourceTable",
+    fk."sourceColumn" AS "sourceColumn",
+    quote_ident(fk."referencedSchema") as "referencedSchema",
+    quote_ident(fk."referencedTable") AS "referencedTable",
+    fk."referencedColumn" AS "referencedColumn"
+FROM
+    pg_tables
+LEFT JOIN LATERAL (
     SELECT
-        quote_ident(pg_tables.tablename) AS "sourceTable",
-        fk."sourceColumn" AS "sourceColumn",
-        fk."referencedTable" AS "referencedTable",
-        fk."referencedColumn" AS "referencedColumn"
-    FROM
-        pg_tables
-    -- using left join to make sure we get all tables, even if they have no dependencies
-    LEFT JOIN LATERAL (
-      SELECT
         ARRAY_AGG(pa.attname::TEXT ORDER BY conkey_unnest.ord) AS "sourceColumn",
-        -- this is already pre-quoted
-        confrelid::regclass AS "referencedTable",
+        ref_ns.nspname AS "referencedSchema",
+        ref_cl.relname AS "referencedTable",
         ARRAY_AGG(con_pk_att.attname::TEXT ORDER BY conkey_unnest.ord) AS "referencedColumn"
-      FROM
+    FROM
         pg_constraint AS pc
-      JOIN
+    JOIN
         pg_class AS pgc
         ON pgc.oid = pc.conrelid
-      JOIN
-          pg_namespace AS pgn
-          ON pgn.oid = pgc.relnamespace
-      JOIN
-          UNNEST(pc.conkey) WITH ORDINALITY AS conkey_unnest(attnum, ord)
-          ON TRUE
-      JOIN
-          UNNEST(pc.confkey) WITH ORDINALITY AS confkey_unnest(attnum, ord)
-          ON conkey_unnest.ord = confkey_unnest.ord -- Join by ordinality
-      JOIN
-          pg_attribute AS pa
-          ON pa.attrelid = pc.conrelid AND pa.attnum = conkey_unnest.attnum
-      JOIN
-          pg_attribute AS con_pk_att
-          ON con_pk_att.attrelid = pc.confrelid AND con_pk_att.attnum = confkey_unnest.attnum
-      WHERE
-          pc.contype = 'f' -- 'f' stands for foreign key
-          AND pgn.nspname = ${schema}
-          AND pgc.relname = pg_tables.tablename
-      GROUP BY
-          pgc.relname, pc.oid, confrelid
-      ORDER BY
-          pgc.relname
-    ) AS fk ON TRUE
+    JOIN
+        pg_namespace AS pgn
+        ON pgn.oid = pgc.relnamespace
+    JOIN
+        UNNEST(pc.conkey) WITH ORDINALITY AS conkey_unnest(attnum, ord)
+        ON TRUE
+    JOIN
+        UNNEST(pc.confkey) WITH ORDINALITY AS confkey_unnest(attnum, ord)
+        ON conkey_unnest.ord = confkey_unnest.ord -- Join by ordinality
+    JOIN
+        pg_attribute AS pa
+        ON pa.attrelid = pc.conrelid AND pa.attnum = conkey_unnest.attnum
+    JOIN
+        pg_attribute AS con_pk_att
+        ON con_pk_att.attrelid = pc.confrelid AND con_pk_att.attnum = confkey_unnest.attnum
+    JOIN
+        pg_class AS ref_cl -- Join to get referenced table name
+        ON ref_cl.oid = pc.confrelid
+    JOIN
+        pg_namespace AS ref_ns -- Join to get referenced schema name
+        ON ref_ns.oid = ref_cl.relnamespace
     WHERE
-        pg_tables.schemaname = ${schema}
+        pc.contype = 'f' -- 'f' stands for foreign key
+        AND pgn.nspname = ${schema}
+        AND pgc.relname = pg_tables.tablename
+    GROUP BY
+        pgc.relname, pc.oid, ref_ns.nspname, ref_cl.relname
     ORDER BY
-        pg_tables.tablename, fk."referencedTable", fk."sourceColumn"; -- @qd_introspection
+        pgc.relname
+) AS fk ON TRUE
+WHERE
+    pg_tables.schemaname = ${schema}
+ORDER BY
+    pg_tables.tablename, fk."referencedTable", fk."sourceColumn";-- @qd_introspection
     `;
 
     return out;
   }
 
-  async get(table: string, values: Record<string, unknown>) {
+  async get(schema: string, table: string, values: Record<string, unknown>) {
     const columnsText = Object.keys(values)
       .map((key, i) => `${doubleQuote(key)} = $${i + 1}`)
       .join(" AND ");
     // TODO: pass the schema along
-    const sqlString = `select *, ctid from public.${table} where ${columnsText} limit 1`;
+    const sqlString = `select *, ctid from ${schema}.${table} where ${columnsText} limit 1 -- @qd_introspection`;
     const params = Object.values(values);
     const span = trace.getActiveSpan();
     const start = Date.now();
@@ -192,6 +199,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
    * @returns
    */
   async *cursor(
+    schema: string,
     table: string,
     options: CursorOptions
   ): AsyncGenerator<PostgresTuple, void, unknown> {
@@ -213,15 +221,17 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
       await this.sql`select setseed(${options.seed})`;
       cursor = this.sql
         // we want to make sure the rows we get are deterministic
-        .unsafe(`select *, ctid from public.${table} order by random()`)
+        .unsafe(
+          `select *, ctid from ${schema}.${table} order by random() -- @qd_introspection`
+        )
         .cursor(3);
     } else {
       // this really needs to be tweaked lol
       cursor = this.sql
         .unsafe(
-          `select *, ctid from public.${table} tablesample bernoulli(${
+          `select *, ctid from ${schema}.${table} tablesample bernoulli(${
             options.requiredRows / tupleEstimate + 10
-          }) repeatable(1)`
+          }) repeatable(1) -- @qd_introspection`
         )
         .cursor(3);
     }
@@ -284,6 +294,8 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
     //
     // Instead we restore tables using `set session_replication_role = 'replica';`
     // to prevent the constraints from being checked.
+
+    // TODO: batch this into a single query
     for (const [table, rows] of Object.entries(tables)) {
       const tableSchema = schema.find((s) => s.tableName === table);
       const allCtids = rows.map((row) => row[ctidSymbol]);
@@ -296,10 +308,14 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
         (c) => `quote_literal(${doubleQuote(c)}) as ${doubleQuote(c)}`
       );
       const query = `select ${quotes.join(
-        ",\n  "
-      )} from (select * from ${doubleQuote(
+        ", "
+      )} from (select * from ${schemaName}.${doubleQuote(
         table
-      )} where ctid = any($1::tid[])) as samples`;
+      )} where ctid = any($1::tid[])) as samples -- @qd_introspection`;
+      log.debug(
+        `${query} : [${allCtids.join(", ")}]`,
+        "pg-connector:serialize"
+      );
       const serialized = await this.sql.unsafe(query, [allCtids]);
 
       const estimate = this.tupleEstimates.get(table) ?? "?";
@@ -386,7 +402,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
           c.table_schema = ${schemaName}
           and c.table_name not in ('pg_stat_statements', 'pg_stat_statements_info')
       GROUP BY
-          c.table_name, cl.reltuples, cl.relpages;
+          c.table_name, cl.reltuples, cl.relpages; -- @qd_introspection
     `;
     return results;
   }
@@ -398,7 +414,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
         serverVersionNum: string;
       }[]
     >`
-      select version() as "serverVersion", current_setting('server_version_num') as "serverVersionNum";
+      select version() as "serverVersion", current_setting('server_version_num') as "serverVersionNum"; -- @qd_introspection
     `;
     return {
       serverVersion: results[0]!.serverVersion,
@@ -418,9 +434,10 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
         toplevel as "topLevel"
       FROM pg_stat_statements
       JOIN pg_user ON pg_user.usesysid = pg_stat_statements.userid
-      WHERE userid != (select usesysid from pg_user where usename = ${PostgresConnector.QUERY_DOCTOR_USER})
-        and query not like '%pg_stat_statements%'
-      LIMIT 10;
+      WHERE query not like '%pg_stat_statements%'
+        and query not like '%@qd_introspection%'
+        and pg_user.usename not in (/* supabase */ 'supabase_admin', 'supabase_auth_admin', /* neon */ 'cloud_admin')
+      LIMIT 10; -- @qd_introspection
     `; // we're excluding `pg_stat_statements` from the results since it's almost certainly unrelated
       return {
         kind: "ok",

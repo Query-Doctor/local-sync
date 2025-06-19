@@ -125,35 +125,43 @@ export class PostgresSyncer {
     // the current search_path which can cause race conditions when pg_dump sets it to ''
     const dependencyList = await connector.dependencies(schemaName);
     const graph = analyzer.buildGraph(dependencyList);
-    const [databaseInfo, recentQueries, schema, dependencies, privilege] =
-      await Promise.all([
-        withSpan("getDatabaseInfo", () => {
-          return connector.getDatabaseInfo();
-        })(),
-        withSpan("getRecentQueries", () => {
-          return connector.getRecentQueries();
-        })(),
-        withSpan("syncSchema", () => {
-          return link.syncSchema(schemaName);
-        })(),
-        withSpan("resolveDependencies", async (span) => {
+    const [
+      databaseInfo,
+      recentQueries,
+      schema,
+      { dependencies, serialized: serializedResult },
+      privilege,
+    ] = await Promise.all([
+      withSpan("getDatabaseInfo", () => {
+        return connector.getDatabaseInfo();
+      })(),
+      withSpan("getRecentQueries", () => {
+        return connector.getRecentQueries();
+      })(),
+      withSpan("syncSchema", () => {
+        return link.syncSchema(schemaName);
+      })(),
+      withSpan("resolveDependencies", async (span) => {
+        span.setAttribute("schemaName", schemaName);
+        const deps = await analyzer.findAllDependencies(schemaName, graph);
+        if (deps.kind !== "ok") {
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message:
+              deps.type === "unexpected_error" ? deps.error.message : deps.type,
+          });
+          return { dependencies: deps, serialized: undefined };
+        }
+        const serialized = await withSpan("serialize", (span) => {
           span.setAttribute("schemaName", schemaName);
-          const deps = await analyzer.findAllDependencies(schemaName, graph);
-          if (deps.kind !== "ok") {
-            span.setStatus({
-              code: SpanStatusCode.ERROR,
-              message:
-                deps.type === "unexpected_error"
-                  ? deps.error.message
-                  : deps.type,
-            });
-          }
-          return deps;
-        })(),
-        withSpan("checkPrivilege", () => {
-          return connector.checkPrivilege();
-        })(),
-      ]);
+          return connector.serialize(schemaName, deps.items, options);
+        })();
+        return { dependencies: deps, serialized };
+      })(),
+      withSpan("checkPrivilege", () => {
+        return connector.checkPrivilege();
+      })(),
+    ]);
 
     if (dependencies.kind !== "ok") {
       return dependencies;
@@ -168,11 +176,11 @@ export class PostgresSyncer {
       });
     }
 
-    const result = await withSpan("serialize", (span) => {
-      span.setAttribute("schemaName", schemaName);
-      return connector.serialize(schemaName, dependencies.items, options);
-    })();
-    const wrapped = schema + result.serialized;
+    if (serializedResult === undefined) {
+      throw new Error(`Serialization result not found`);
+    }
+
+    const wrapped = schema + serializedResult.schema;
 
     let queries: RecentQueries;
     if (recentQueries.kind === "ok") {
@@ -187,11 +195,11 @@ export class PostgresSyncer {
       kind: "ok",
       versionNum: databaseInfo.serverVersionNum,
       version: databaseInfo.serverVersion,
-      sampledRecords: result.sampledRecords,
+      sampledRecords: serializedResult.sampledRecords,
       notices,
       queries,
       setup: wrapped,
-      // metadata: result.schema,
+      metadata: serializedResult.schema,
     };
   }
 

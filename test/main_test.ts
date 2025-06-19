@@ -62,7 +62,7 @@ Deno.test(async function addTest() {
     maxRows: 8,
     seed: 0,
   });
-  const result = await da.findAllDependencies("public");
+  const result = await da.findAllDependencies("public", new Map());
   assertEquals(result.kind, "ok");
   if (result.kind === "ok") {
     assertEquals(result.items, {

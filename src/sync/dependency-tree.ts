@@ -4,6 +4,7 @@ export type Dependency =
   // a source table with dependencies
   | {
       sourceTable: string;
+      sourceSchema: string;
       sourceColumn: string[];
       referencedSchema: string;
       referencedTable: string;
@@ -12,13 +13,16 @@ export type Dependency =
   // a source table with no dependencies
   | {
       sourceTable: string;
+      sourceSchema: string;
       sourceColumn: null;
+      referencedSchema: null;
       referencedTable: null;
       referencedColumn: null;
     };
 
 /** A pointer from a current table context to another */
 interface Pointer {
+  sourceSchema: string;
   sourceColumn: string[];
   referencedSchema: string;
   referencedTable: string;
@@ -77,9 +81,13 @@ export type CursorOptions = { requiredRows: number; seed: number };
 export interface DatabaseConnector<
   T extends InsertableTuple = InsertableTuple
 > {
-  cursor(table: string, options: CursorOptions): Cursor<T>;
+  cursor(schema: string, table: string, options: CursorOptions): Cursor<T>;
   dependencies(schema: string): Promise<Dependency[]>;
-  get(table: string, values: Record<string, unknown>): Promise<T | undefined>;
+  get(
+    schema: string,
+    table: string,
+    values: Record<string, unknown>
+  ): Promise<T | undefined>;
   /** The unique value of the returned tuple */
   hash(value: T): Hash;
   /** Used to run stuff like `vacuum analyze` before the analysis begins */
@@ -141,7 +149,7 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
       const remainingTables = Array.from(graph.keys());
 
       for (const source of remainingTables) {
-        cursors[source] = this.connector.cursor(source, this.options);
+        cursors[source] = this.connector.cursor(schema, source, this.options);
         items[source] = [];
       }
 
@@ -325,6 +333,7 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
         continue;
       }
       const referenced = await this.connector.get(
+        dep.referencedSchema,
         dep.referencedTable,
         values.params
       );
@@ -354,13 +363,11 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
     for (const dependency of dependencies) {
       const existing = graph.get(dependency.sourceTable) ?? [];
       if (dependency.sourceColumn) {
-        console.log(dependency);
-        const schema = "public";
-        const table = dependency.referencedTable;
         existing.push({
+          sourceSchema: dependency.sourceSchema,
           sourceColumn: dependency.sourceColumn,
-          referencedSchema: schema,
-          referencedTable: table,
+          referencedSchema: dependency.referencedSchema,
+          referencedTable: dependency.referencedTable,
           referencedColumn: dependency.referencedColumn,
         });
       }
