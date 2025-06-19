@@ -126,14 +126,13 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
   ) {}
 
   async findAllDependencies(
-    schema: string
+    schema: string,
+    graph: DependencyGraph
   ): Promise<FindAllDependenciesResult<T["data"]>> {
     log.debug("Starting dependency resolution", "dependency-resolution");
     this.seen.clear();
     try {
       await this.connector.onStartAnalyze?.(schema);
-      const allDependencies = await this.connector.dependencies(schema);
-      const graph = this.buildGraph(allDependencies);
 
       const items: TableRows<T["data"]> = {};
 
@@ -355,6 +354,7 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
     for (const dependency of dependencies) {
       const existing = graph.get(dependency.sourceTable) ?? [];
       if (dependency.sourceColumn) {
+        console.log(dependency);
         const schema = "public";
         const table = dependency.referencedTable;
         existing.push({

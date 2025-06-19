@@ -119,6 +119,12 @@ export class PostgresSyncer {
     const connector = new PostgresConnector(sql);
     const link = new PostgresSchemaLink(urlString, schemaName);
     const analyzer = new DependencyAnalyzer(connector, options);
+    // Even though this looks like it can be parallelized, it's not possible to run it
+    // simultaneously with `link.syncSchema` because pg_dump changes `search_path` which
+    // causes inconsistent results when querying regclasses. They get prefixed with
+    // the current search_path which can cause race conditions when pg_dump sets it to ''
+    const dependencyList = await connector.dependencies(schemaName);
+    const graph = analyzer.buildGraph(dependencyList);
     const [databaseInfo, recentQueries, schema, dependencies, privilege] =
       await Promise.all([
         withSpan("getDatabaseInfo", () => {
@@ -132,7 +138,7 @@ export class PostgresSyncer {
         })(),
         withSpan("resolveDependencies", async (span) => {
           span.setAttribute("schemaName", schemaName);
-          const deps = await analyzer.findAllDependencies(schemaName);
+          const deps = await analyzer.findAllDependencies(schemaName, graph);
           if (deps.kind !== "ok") {
             span.setStatus({
               code: SpanStatusCode.ERROR,

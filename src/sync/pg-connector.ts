@@ -102,7 +102,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
    */
   async dependencies(schema: string) {
     const out = await this.sql<Dependency[]>`
-        SELECT
+    SELECT
         quote_ident(pg_tables.tablename) AS "sourceTable",
         fk."sourceColumn" AS "sourceColumn",
         fk."referencedTable" AS "referencedTable",
@@ -114,7 +114,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
       SELECT
         ARRAY_AGG(pa.attname::TEXT ORDER BY conkey_unnest.ord) AS "sourceColumn",
         -- this is already pre-quoted
-        confrelid::regclass::TEXT AS "referencedTable",
+        confrelid::regclass AS "referencedTable",
         ARRAY_AGG(con_pk_att.attname::TEXT ORDER BY conkey_unnest.ord) AS "referencedColumn"
       FROM
         pg_constraint AS pc
@@ -148,7 +148,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
     WHERE
         pg_tables.schemaname = ${schema}
     ORDER BY
-        pg_tables.tablename, fk."referencedTable", fk."sourceColumn";
+        pg_tables.tablename, fk."referencedTable", fk."sourceColumn"; -- @qd_introspection
     `;
     console.log(out);
 
