@@ -1,8 +1,9 @@
 import crypto from "node:crypto";
+import { env } from "./env.ts";
 
 export function sanitizePostgresUrl(db: string): string {
   // sanitization is only needed for the hosted instance
-  if (Deno.env.get("HOSTED") !== "true") {
+  if (!env.HOSTED) {
     return db;
   }
   const hash = crypto.createHash("sha256").update(db).digest("hex");

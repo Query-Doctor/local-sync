@@ -5,6 +5,8 @@ import * as limiter from "./rate-limit.ts";
 import { SyncRequest } from "./sync.dto.ts";
 import { ZodError } from "zod/v4";
 import { shutdownController } from "../shutdown.ts";
+import { env } from "../env.ts";
+import { SyncResult } from "../sync/syncer.ts";
 
 const syncer = new PostgresSyncer();
 
@@ -55,16 +57,53 @@ async function onSync(req: Request) {
     }
     return new Response("Invalid db url", { status: 400 });
   }
-  const result = await syncer.syncWithUrl(dbUrl, schema, {
-    requiredRows,
-    maxRows,
-    seed,
-  });
+  let result: SyncResult;
+  try {
+    result = await syncer.syncWithUrl(dbUrl, schema, {
+      requiredRows,
+      maxRows,
+      seed,
+    });
+  } catch (error) {
+    // We don't throw errors randomly so this should only happen if there's a bug
+    if (error instanceof Error && !env.HOSTED) {
+      return Response.json(
+        { kind: "error", type: "unexpected_error", error: error.message },
+        { status: 500 }
+      );
+    }
+    return Response.json(
+      {
+        kind: "error",
+        type: "unexpected_error",
+        error: "Internal Server Error",
+      },
+      { status: 500 }
+    );
+  }
   if (result.kind !== "ok") {
     span?.setStatus({ code: SpanStatusCode.ERROR, message: result.type });
     if (result.type === "unexpected_error") {
       log.error(result.error.message, "http:sync");
-      return new Response("Internal Server Error", { status: 500 });
+      if (!env.HOSTED) {
+        // No problem leaking the error message to the user if they're selfhosting
+        return Response.json(
+          {
+            kind: "error",
+            type: "unexpected_error",
+            error: result.error.message,
+          },
+          { status: 500 }
+        );
+      }
+      return Response.json(
+        {
+          kind: "error",
+          type: "unexpected_error",
+          error: "Internal Server Error",
+        },
+        { status: 500 }
+      );
     } else if (result.type === "max_table_iterations_reached") {
       return Response.json(
         {
