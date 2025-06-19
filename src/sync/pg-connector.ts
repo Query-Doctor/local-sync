@@ -1,4 +1,4 @@
-import postgres, { type ParameterOrJSON } from "postgres";
+import postgres from "postgres";
 import type {
   CursorOptions,
   DatabaseConnector,
@@ -168,7 +168,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
     const start = Date.now();
     const data = await this.sql.unsafe(
       sqlString,
-      params as ParameterOrJSON<never>[]
+      params as postgres.ParameterOrJSON<never>[]
     );
     const end = Date.now();
     span?.addEvent("get", end, start);

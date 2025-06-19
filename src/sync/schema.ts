@@ -1,4 +1,3 @@
-import postgres from "postgres";
 import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { log } from "../log.ts";
 import { shutdownController } from "../shutdown.ts";
@@ -10,27 +9,20 @@ export type TableStats = {
 export class PostgresSchemaLink {
   private readonly PG_DUMP_VERSION = "17.2";
   private readonly pgDumpBinaryPath: string;
-  constructor(
-    public readonly sql: postgres.Sql,
-    public readonly url: string,
-    public readonly schema: string
-  ) {
+  constructor(public readonly url: string, public readonly schema: string) {
     this.pgDumpBinaryPath = this.findPgDumpBinary();
-    // sql.listen("ddl_events", (f) => {
-    //   const data = JSON.parse(f);
-    //   // {"tag" : "ALTER TABLE", "command" : "ALTER TABLE", "object_type" : "table", "schema" : "public", "identity" : "public.books", "in_extension" : false}
-    //   log.info(`(${data.identity}) Schema change detected`, "schema:sync");
-    //   this.syncSchema();
-    // });
-  }
-
-  static fromUrl(url: string, schema: string = "public"): PostgresSchemaLink {
-    const sql = postgres(url);
-    return new PostgresSchemaLink(sql, url, schema);
   }
 
   findPgDumpBinary(): string {
-    const forcePath = Deno.env.get("PG_DUMP_BINARY");
+    let forcePath: string | undefined;
+    try {
+      forcePath = Deno.env.get("PG_DUMP_BINARY");
+    } catch (_err) {
+      log.warn(
+        "Permission denied to read PG_DUMP_BINARY from env, falling back to built-in binary",
+        "schema:setup"
+      );
+    }
     if (forcePath) {
       log.info(
         `Using pg_dump binary from env(PG_DUMP_BINARY): ${forcePath}`,
@@ -49,14 +41,14 @@ export class PostgresSchemaLink {
   }
 
   async syncSchema(schemaName: string): Promise<string> {
-    log.debug("Syncing schema", "schema:sync");
+    log.debug(`Syncing schema (${schemaName})`, "schema:sync");
     // const [dumping, omits] = await this.omitBigBois();
     const args = [
       // the owner doesn't exist
       "--no-owner",
       // not needed most likely
       "--no-comments",
-      // privileges don't exist
+      // the user doesn't exist where we're restoring this dump
       "--no-privileges",
       // providers like supabase have a ton of stuff we don't need in other schemas
       "--schema",
@@ -64,18 +56,15 @@ export class PostgresSchemaLink {
       "--schema-only",
       this.url,
     ];
-    log.debug(
-      `Dumping schema with pg_dump using args: ${args.join(" ")}`,
-      "schema:sync"
-    );
+    log.debug(`Dumping schema: pg_dump ${args.join(" ")}`, "schema:sync");
     const command = new Deno.Command(this.pgDumpBinaryPath, {
       args,
       stdout: "piped",
       stderr: "piped",
       signal: shutdownController.signal,
     });
-    const outputPromise = command.output();
-    const output = await outputPromise;
+    const child = command.spawn();
+    const output = await child.output();
     return this.handleSchemaOutput(output);
   }
 
@@ -99,20 +88,4 @@ export class PostgresSchemaLink {
     // we should also remove the comments describing the schema above but meh
     return schema.replace(/^CREATE SCHEMA\s+.*\n\n?/m, "");
   }
-
-  // async omitBigBois(): Promise<[TableCount[], TableCount[]]> {
-  //   const result: TableCount[] = await this.sql`SELECT
-  //         relname as "tableName",
-  //         n_live_tup as count
-  //     FROM pg_stat_user_tables
-  //     WHERE schemaname = 'public'
-  //     ORDER BY n_live_tup DESC;`;
-  //   return partition(
-  //     result.map((row) => ({
-  //       tableName: row.tableName,
-  //       count: Number(row.count),
-  //     })),
-  //     (row) => row.count < 25
-  //   );
-  // }
 }

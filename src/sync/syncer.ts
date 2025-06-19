@@ -117,7 +117,7 @@ export class PostgresSyncer {
       };
     }
     const connector = new PostgresConnector(sql);
-    const link = new PostgresSchemaLink(sql, urlString, schemaName);
+    const link = new PostgresSchemaLink(urlString, schemaName);
     const analyzer = new DependencyAnalyzer(connector, options);
     const [databaseInfo, recentQueries, schema, dependencies, privilege] =
       await Promise.all([
