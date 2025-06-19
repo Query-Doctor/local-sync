@@ -444,16 +444,15 @@ ORDER BY
         queries: results,
       };
     } catch (err) {
-      if (err instanceof Error) {
-        if (
-          err.message.includes('relation "pg_stat_statements" does not exist')
-        ) {
-          return {
-            kind: "error",
-            type: "extension_not_installed",
-            extensionName: "pg_stat_statements",
-          };
-        }
+      if (
+        err instanceof Error &&
+        err.message.includes('relation "pg_stat_statements" does not exist')
+      ) {
+        return {
+          kind: "error",
+          type: "extension_not_installed",
+          extensionName: "pg_stat_statements",
+        };
       }
       console.error(err);
       return {
@@ -471,7 +470,7 @@ ORDER BY
     const [results] = await this.sql<
       { username: string; isSuperuser: boolean }[]
     >`
-      SELECT usename as "username", usesuper as "isSuperuser" FROM pg_user WHERE usename = current_user;
+      SELECT usename as "username", usesuper as "isSuperuser" FROM pg_user WHERE usename = current_user; -- @qd_introspection
     `;
     if (!results) {
       return { username: "unknown", isSuperuser: false };
