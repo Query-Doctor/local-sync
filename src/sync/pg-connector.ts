@@ -150,7 +150,6 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
     ORDER BY
         pg_tables.tablename, fk."referencedTable", fk."sourceColumn"; -- @qd_introspection
     `;
-    console.log(out);
 
     return out;
   }
@@ -428,7 +427,6 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
         queries: results,
       };
     } catch (err) {
-      console.error(err);
       if (err instanceof Error) {
         if (
           err.message.includes('relation "pg_stat_statements" does not exist')
@@ -440,6 +438,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
           };
         }
       }
+      console.error(err);
       return {
         kind: "error",
         type: "postgres_error",
