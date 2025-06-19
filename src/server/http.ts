@@ -4,6 +4,7 @@ import { log } from "../log.ts";
 import * as limiter from "./rate-limit.ts";
 import { SyncRequest } from "./sync.dto.ts";
 import { ZodError } from "zod/v4";
+import { shutdownController } from "../shutdown.ts";
 
 const syncer = new PostgresSyncer();
 
@@ -105,36 +106,39 @@ async function onSync(req: Request) {
 }
 
 export function createServer(port: number) {
-  return Deno.serve({ port }, async (req, info) => {
-    const url = new URL(req.url);
-    log.http(req);
+  return Deno.serve(
+    { port, signal: shutdownController.signal },
+    async (req, info) => {
+      const url = new URL(req.url);
+      log.http(req);
 
-    const limit = limiter.sync.check(url.pathname, info.remoteAddr.hostname);
-    if (limit.limited) {
-      return limiter.appendHeaders(
-        new Response("Rate limit exceeded", { status: 429 }),
-        limit
-      );
+      const limit = limiter.sync.check(url.pathname, info.remoteAddr.hostname);
+      if (limit.limited) {
+        return limiter.appendHeaders(
+          new Response("Rate limit exceeded", { status: 429 }),
+          limit
+        );
+      }
+      if (url.pathname === "/postgres/all") {
+        if (req.method === "OPTIONS") {
+          return new Response("OK", {
+            status: 200,
+            headers: corsHeaders,
+          });
+        }
+        if (req.method !== "POST") {
+          return new Response("Method not allowed", { status: 405 });
+        }
+        const res = await onSync(req);
+        for (const [key, value] of Object.entries(corsHeaders)) {
+          res.headers.set(key, value);
+        }
+        limiter.appendHeaders(res, limit);
+        return res;
+      }
+      return new Response("Not found", { status: 404 });
     }
-    if (url.pathname === "/postgres/all") {
-      if (req.method === "OPTIONS") {
-        return new Response("OK", {
-          status: 200,
-          headers: corsHeaders,
-        });
-      }
-      if (req.method !== "POST") {
-        return new Response("Method not allowed", { status: 405 });
-      }
-      const res = await onSync(req);
-      for (const [key, value] of Object.entries(corsHeaders)) {
-        res.headers.set(key, value);
-      }
-      limiter.appendHeaders(res, limit);
-      return res;
-    }
-    return new Response("Not found", { status: 404 });
-  });
+  );
 }
 
 const corsHeaders = {

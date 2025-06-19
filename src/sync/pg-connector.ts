@@ -9,6 +9,7 @@ import type {
 } from "./dependency-tree.ts";
 import { log } from "../log.ts";
 import { trace } from "@opentelemetry/api";
+import { shutdownController } from "../shutdown.ts";
 
 const ctidSymbol = Symbol("ctid");
 type Row = NonNullable<postgres.Row & Iterable<postgres.Row>> & {
@@ -163,10 +164,14 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
       table
     )} where ${columnsText} limit 1`;
     const params = Object.values(values);
+    const span = trace.getActiveSpan();
+    const start = Date.now();
     const data = await this.sql.unsafe(
       sqlString,
       params as ParameterOrJSON<never>[]
     );
+    const end = Date.now();
+    span?.addEvent("get", end, start);
     if (data.length === 0) {
       return undefined;
     }
@@ -223,6 +228,9 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
         .cursor(1);
     }
     for await (const [value] of cursor) {
+      if (shutdownController.signal.aborted) {
+        break;
+      }
       if (value === undefined) {
         log.error(
           `Cursor for table ${table} returned an undefined value`,

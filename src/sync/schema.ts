@@ -1,6 +1,7 @@
 import postgres from "postgres";
 import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { log } from "../log.ts";
+import { shutdownController } from "../shutdown.ts";
 
 export type TableStats = {
   name: string;
@@ -49,7 +50,6 @@ export class PostgresSchemaLink {
 
   async syncSchema(schemaName: string): Promise<string> {
     log.debug("Syncing schema", "schema:sync");
-    const decoder = new TextDecoder();
     // const [dumping, omits] = await this.omitBigBois();
     const args = [
       // the owner doesn't exist
@@ -68,17 +68,20 @@ export class PostgresSchemaLink {
       `Dumping schema with pg_dump using args: ${args.join(" ")}`,
       "schema:sync"
     );
-    const span = trace.getActiveSpan();
-    span?.addEvent("sync:start");
     const command = new Deno.Command(this.pgDumpBinaryPath, {
       args,
       stdout: "piped",
       stderr: "piped",
+      signal: shutdownController.signal,
     });
-    const start = Date.now();
-    const output = await command.output();
-    const end = Date.now();
-    span?.addEvent("sync:end", end, start);
+    const outputPromise = command.output();
+    const output = await outputPromise;
+    return this.handleSchemaOutput(output);
+  }
+
+  private handleSchemaOutput(output: Deno.CommandOutput) {
+    const span = trace.getActiveSpan();
+    const decoder = new TextDecoder();
     span?.setAttribute("outputBytes", output.stdout.byteLength);
     if (output.code !== 0) {
       const stderr = decoder.decode(output.stderr);
@@ -92,7 +95,9 @@ export class PostgresSchemaLink {
   }
 
   private sanitizeSchema(schema: string): string {
-    return schema.replace(/^CREATE SCHEMA\s./, "");
+    // strip CREATE SCHEMA statements and a little bit of extra whitespace.
+    // we should also remove the comments describing the schema above but meh
+    return schema.replace(/^CREATE SCHEMA\s+.*\n\n?/m, "");
   }
 
   // async omitBigBois(): Promise<[TableCount[], TableCount[]]> {
