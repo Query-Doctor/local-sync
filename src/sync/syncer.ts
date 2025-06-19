@@ -180,7 +180,7 @@ export class PostgresSyncer {
       throw new Error(`Serialization result not found`);
     }
 
-    const wrapped = schema + serializedResult.schema;
+    const wrapped = schema + serializedResult.serialized;
 
     let queries: RecentQueries;
     if (recentQueries.kind === "ok") {
@@ -199,7 +199,7 @@ export class PostgresSyncer {
       notices,
       queries,
       setup: wrapped,
-      metadata: serializedResult.schema,
+      metadata: serializedResult.serialized,
     };
   }
 
