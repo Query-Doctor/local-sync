@@ -88,24 +88,22 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
   constructor(private readonly sql: postgres.Sql) {}
 
   async onStartAnalyze(_schema: string): Promise<void> {
-    const results = await this.sql`
-        SELECT relname AS table, n_live_tup AS count FROM pg_stat_user_tables
-      `;
+    const results = await this
+      .sql`SELECT relname AS table, n_live_tup AS count FROM pg_stat_user_tables`;
     for (const result of results) {
       this.tupleEstimates.set(result.table, result.count);
     }
-    // it's important to refresh the stats
-    try {
-      await this.sql`vacuum analyze`;
-    } catch (_err) {
-      // but not the end of the world if we can't
-    }
   }
 
+  /**
+   * Returns a list of dependencies for a given schema.
+   *
+   * The table and column names are quoted according to postgres rules
+   */
   async dependencies(schema: string) {
     const out = await this.sql<Dependency[]>`
         SELECT
-        pg_tables.tablename AS "sourceTable",
+        quote_ident(pg_tables.tablename) AS "sourceTable",
         fk."sourceColumn" AS "sourceColumn",
         fk."referencedTable" AS "referencedTable",
         fk."referencedColumn" AS "referencedColumn"
@@ -114,8 +112,8 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
     -- using left join to make sure we get all tables, even if they have no dependencies
     LEFT JOIN LATERAL (
       SELECT
-        pgc.relname::TEXT AS "sourceTable",
         ARRAY_AGG(pa.attname::TEXT ORDER BY conkey_unnest.ord) AS "sourceColumn",
+        -- this is already pre-quoted
         confrelid::regclass::TEXT AS "referencedTable",
         ARRAY_AGG(con_pk_att.attname::TEXT ORDER BY conkey_unnest.ord) AS "referencedColumn"
       FROM
@@ -152,6 +150,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
     ORDER BY
         pg_tables.tablename, fk."referencedTable", fk."sourceColumn";
     `;
+    console.log(out);
 
     return out;
   }
@@ -160,12 +159,12 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
     const columnsText = Object.keys(values)
       .map((key, i) => `${doubleQuote(key)} = $${i + 1}`)
       .join(" AND ");
-    const sqlString = `select *, ctid from ${doubleQuote(
-      table
-    )} where ${columnsText} limit 1`;
+    // TODO: pass the schema along
+    const sqlString = `select *, ctid from public.${table} where ${columnsText} limit 1`;
     const params = Object.values(values);
     const span = trace.getActiveSpan();
     const start = Date.now();
+    log.debug(`${sqlString} : [${params.join(", ")}]`, "pg-connector:get");
     const data = await this.sql.unsafe(
       sqlString,
       params as postgres.ParameterOrJSON<never>[]
@@ -173,7 +172,7 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
     const end = Date.now();
     span?.addEvent("get", end, start);
     if (data.length === 0) {
-      return undefined;
+      return;
     }
     const newValue = data[0] as Row;
     newValue[ctidSymbol] = newValue.ctid;
@@ -215,17 +214,17 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
       await this.sql`select setseed(${options.seed})`;
       cursor = this.sql
         // we want to make sure the rows we get are deterministic
-        .unsafe(`select *, ctid from ${table} order by random()`)
-        .cursor(1);
+        .unsafe(`select *, ctid from public.${table} order by random()`)
+        .cursor(3);
     } else {
       // this really needs to be tweaked lol
       cursor = this.sql
         .unsafe(
-          `select *, ctid from ${table} tablesample bernoulli(${
+          `select *, ctid from public.${table} tablesample bernoulli(${
             options.requiredRows / tupleEstimate + 10
           }) repeatable(1)`
         )
-        .cursor(1);
+        .cursor(3);
     }
     for await (const [value] of cursor) {
       if (shutdownController.signal.aborted) {

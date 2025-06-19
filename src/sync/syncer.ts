@@ -60,7 +60,7 @@ export type SyncResult =
       sampledRecords: Record<string, number>;
       notices: SyncNotice[];
       queries: RecentQueries;
-      metadata: TableMetadata[];
+      // metadata: TableMetadata[];
     }
   | PostgresConnectionError
   | PostgresError
@@ -133,7 +133,6 @@ export class PostgresSyncer {
         withSpan("resolveDependencies", async (span) => {
           span.setAttribute("schemaName", schemaName);
           const deps = await analyzer.findAllDependencies(schemaName);
-          console.log(deps);
           if (deps.kind !== "ok") {
             span.setStatus({
               code: SpanStatusCode.ERROR,
@@ -186,7 +185,7 @@ export class PostgresSyncer {
       notices,
       queries,
       setup: wrapped,
-      metadata: result.schema,
+      // metadata: result.schema,
     };
   }
 

@@ -1,11 +1,11 @@
 import { log } from "../log.ts";
-import { tracer, withSpan } from "../otel.ts";
 
 export type Dependency =
   // a source table with dependencies
   | {
       sourceTable: string;
       sourceColumn: string[];
+      referencedSchema: string;
       referencedTable: string;
       referencedColumn: string[];
     }
@@ -20,6 +20,7 @@ export type Dependency =
 /** A pointer from a current table context to another */
 interface Pointer {
   sourceColumn: string[];
+  referencedSchema: string;
   referencedTable: string;
   referencedColumn: string[];
 }
@@ -168,9 +169,6 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
           return {
             kind: "error",
             type: "max_table_iterations_reached",
-            // error: new Error(
-            //   "Max table iterations reached. This is a bug with the dependency analyzer."
-            // ),
           };
         }
         for (let i = remainingTables.length - 1; i >= 0; i--) {
@@ -323,7 +321,8 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
     const results: T[] = [];
     for (const dep of table) {
       const values = valuesFor(dep);
-      if (!values.ok) {
+      const fullyReferencesOtherRow = values.ok;
+      if (!fullyReferencesOtherRow) {
         continue;
       }
       const referenced = await this.connector.get(
@@ -356,9 +355,12 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
     for (const dependency of dependencies) {
       const existing = graph.get(dependency.sourceTable) ?? [];
       if (dependency.sourceColumn) {
+        const schema = "public";
+        const table = dependency.referencedTable;
         existing.push({
           sourceColumn: dependency.sourceColumn,
-          referencedTable: dependency.referencedTable,
+          referencedSchema: schema,
+          referencedTable: table,
           referencedColumn: dependency.referencedColumn,
         });
       }

@@ -72,8 +72,12 @@ export class PostgresSchemaLink {
     const span = trace.getActiveSpan();
     const decoder = new TextDecoder();
     span?.setAttribute("outputBytes", output.stdout.byteLength);
+    const stderr =
+      output.stderr.byteLength > 0 ? decoder.decode(output.stderr) : undefined;
+    if (stderr) {
+      console.warn(stderr);
+    }
     if (output.code !== 0) {
-      const stderr = decoder.decode(output.stderr);
       span?.setStatus({ code: SpanStatusCode.ERROR, message: stderr });
       log.error(`Error: ${stderr}`, "schema:sync");
       throw new Error(stderr);
