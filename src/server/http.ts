@@ -182,6 +182,8 @@ export function createServer(port: number) {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
+  // cache the preflight requests for 1 day
+  "Access-Control-Max-Age": "86400",
   "Access-Control-Allow-Methods": "POST",
   "Access-Control-Allow-Headers": "Content-Type",
   "Access-Control-Expose-Headers":
