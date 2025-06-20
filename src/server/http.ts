@@ -144,9 +144,9 @@ async function onSync(req: Request) {
   return Response.json(result, { status: 200 });
 }
 
-export function createServer(port: number) {
+export function createServer(hostname: string, port: number) {
   return Deno.serve(
-    { port, signal: shutdownController.signal },
+    { hostname, port, signal: shutdownController.signal },
     async (req, info) => {
       const url = new URL(req.url);
       log.http(req);

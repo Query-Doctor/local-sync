@@ -6,6 +6,7 @@
     "jsr:@std/assert@^1.0.13": "1.0.13",
     "jsr:@std/bytes@^1.0.5": "1.0.5",
     "jsr:@std/collections@*": "1.0.10",
+    "jsr:@std/collections@^1.1.1": "1.1.1",
     "jsr:@std/internal@^1.0.6": "1.0.8",
     "jsr:@std/io@*": "0.225.2",
     "npm:@opentelemetry/api@*": "1.9.0",
@@ -30,6 +31,9 @@
     },
     "@std/collections@1.0.10": {
       "integrity": "903af106a3d92970d74e20f7ebff77d9658af9bef4403f1dc42a7801c0575899"
+    },
+    "@std/collections@1.1.1": {
+      "integrity": "eff6443fbd9d5a6697018fb39c5d13d5f662f0045f21392d640693d0008ab2af"
     },
     "@std/internal@1.0.8": {
       "integrity": "fc66e846d8d38a47cffd274d80d2ca3f0de71040f855783724bb6b87f60891f5"
@@ -568,6 +572,7 @@
       "jsr:@opentelemetry/api@^1.9.0",
       "jsr:@rabbit-company/rate-limiter@3",
       "jsr:@std/assert@^1.0.13",
+      "jsr:@std/collections@^1.1.1",
       "npm:zod@^3.25.67"
     ]
   }

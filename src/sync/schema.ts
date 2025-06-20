@@ -1,6 +1,7 @@
 import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { log } from "../log.ts";
 import { shutdownController } from "../shutdown.ts";
+import { env } from "../env.ts";
 
 export type TableStats = {
   name: string;
@@ -14,15 +15,7 @@ export class PostgresSchemaLink {
   }
 
   findPgDumpBinary(): string {
-    let forcePath: string | undefined;
-    try {
-      forcePath = Deno.env.get("PG_DUMP_BINARY");
-    } catch (_err) {
-      log.warn(
-        "Permission denied to read PG_DUMP_BINARY from env, falling back to built-in binary",
-        "schema:setup"
-      );
-    }
+    const forcePath = env.PG_DUMP_BINARY;
     if (forcePath) {
       log.info(
         `Using pg_dump binary from env(PG_DUMP_BINARY): ${forcePath}`,

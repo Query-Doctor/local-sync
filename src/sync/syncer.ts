@@ -13,6 +13,7 @@ import {
 import { PostgresSchemaLink } from "./schema.ts";
 import { withSpan } from "../otel.ts";
 import { SpanStatusCode } from "@opentelemetry/api";
+import { env } from "../env.ts";
 
 type SyncOptions = DependencyAnalyzerOptions;
 
@@ -84,7 +85,7 @@ export class PostgresSyncer {
       /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(url.hostname) ||
       // ipv6 localhost
       url.hostname === "[::1]";
-    if (isLocalhost && Deno.env.get("DISALLOW_LOCAL_SYNC") === "true") {
+    if (isLocalhost && env.HOSTED) {
       return {
         kind: "error",
         type: "postgres_connection_error",
