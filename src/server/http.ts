@@ -158,6 +158,12 @@ export function createServer(hostname: string, port: number) {
           limit
         );
       }
+      if (url.pathname === "/") {
+        return Response.redirect(
+          "https://github.com/Query-Doctor/local-sync",
+          307
+        );
+      }
       if (url.pathname === "/postgres/all") {
         if (req.method === "OPTIONS") {
           return new Response("OK", {
