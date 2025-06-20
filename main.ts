@@ -2,6 +2,7 @@ import { createServer } from "./src/server/http.ts";
 import { log } from "./src/log.ts";
 import { shutdown } from "./src/shutdown.ts";
 import { env } from "./src/env.ts";
+import { PostgresSchemaLink } from "./src/sync/schema.ts";
 
 // Learn more at https://docs.deno.com/runtime/manual/examples/module_metadata#concepts
 if (import.meta.main) {
@@ -9,6 +10,10 @@ if (import.meta.main) {
   const arch = Deno.build.arch;
   log.info(
     `Starting server (${os}-${arch}) on ${env.HOST}:${env.PORT}`,
+    "main"
+  );
+  log.info(
+    `Using pg_dump binary: ${PostgresSchemaLink.pgDumpBinaryPath}`,
     "main"
   );
   createServer(env.HOST, env.PORT);

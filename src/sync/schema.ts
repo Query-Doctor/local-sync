@@ -8,13 +8,12 @@ export type TableStats = {
 };
 
 export class PostgresSchemaLink {
-  private readonly PG_DUMP_VERSION = "17.2";
-  private readonly pgDumpBinaryPath: string;
-  constructor(public readonly url: string, public readonly schema: string) {
-    this.pgDumpBinaryPath = this.findPgDumpBinary();
-  }
+  private static readonly PG_DUMP_VERSION = "17.2";
+  public static readonly pgDumpBinaryPath =
+    PostgresSchemaLink.findPgDumpBinary();
+  constructor(public readonly url: string, public readonly schema: string) {}
 
-  findPgDumpBinary(): string {
+  static findPgDumpBinary(): string {
     const forcePath = env.PG_DUMP_BINARY;
     if (forcePath) {
       log.info(
@@ -50,7 +49,7 @@ export class PostgresSchemaLink {
       this.url,
     ];
     log.debug(`Dumping schema: pg_dump ${args.join(" ")}`, "schema:sync");
-    const command = new Deno.Command(this.pgDumpBinaryPath, {
+    const command = new Deno.Command(PostgresSchemaLink.pgDumpBinaryPath, {
       args,
       stdout: "piped",
       stderr: "piped",
