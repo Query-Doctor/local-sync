@@ -37,4 +37,4 @@ lerna-debug.log*
 # Sentry Config File
 .sentryclirc
 lgtm
-sync
+/sync

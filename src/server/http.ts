@@ -22,11 +22,24 @@ async function onSync(req: Request) {
   try {
     body = SyncRequest.parse(JSON.parse(bodyString));
   } catch (e: unknown) {
-    console.log(e);
     if (e instanceof ZodError) {
-      return new Response(e.message, { status: 400 });
+      return Response.json(
+        {
+          kind: "error",
+          type: "invalid_body",
+          error: e.issues.map((issue) => issue.message).join("\n"),
+        },
+        { status: 400 }
+      );
     }
-    return new Response("Invalid body", { status: 400 });
+    return Response.json(
+      {
+        kind: "error",
+        type: "unknown_error",
+        error: String(e),
+      },
+      { status: 400 }
+    );
   }
   const { seed, schema, requiredRows, maxRows } = body;
   const span = trace.getActiveSpan();
@@ -45,21 +58,21 @@ async function onSync(req: Request) {
   span?.setAttribute("requiredRows", requiredRows);
   span?.setAttribute("db.host", url.hostname);
   let dbUrl: URL;
-  try {
-    dbUrl = new URL(body.db);
-  } catch (e: unknown) {
-    span?.setStatus({ code: SpanStatusCode.ERROR, message: "invalid_db_url" });
-    if (e instanceof Error) {
-      return Response.json(
-        { kind: "error", type: "invalid_db_url", error: e.message },
-        { status: 400 }
-      );
-    }
-    return new Response("Invalid db url", { status: 400 });
-  }
+  // try {
+  //   dbUrl = new URL(body.db);
+  // } catch (e: unknown) {
+  //   span?.setStatus({ code: SpanStatusCode.ERROR, message: "invalid_db_url" });
+  //   if (e instanceof Error) {
+  //     return Response.json(
+  //       { kind: "error", type: "invalid_db_url", error: e.message },
+  //       { status: 400 }
+  //     );
+  //   }
+  //   return new Response("Invalid db url", { status: 400 });
+  // }
   let result: SyncResult;
   try {
-    result = await syncer.syncWithUrl(dbUrl, schema, {
+    result = await syncer.syncWithUrl(body.db, schema, {
       requiredRows,
       maxRows,
       seed,

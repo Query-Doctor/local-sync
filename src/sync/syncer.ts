@@ -13,7 +13,7 @@ import {
 import { PostgresSchemaLink } from "./schema.ts";
 import { withSpan } from "../otel.ts";
 import { SpanStatusCode } from "@opentelemetry/api";
-import { env } from "../env.ts";
+import { Connectable } from "./connectable.ts";
 
 type SyncOptions = DependencyAnalyzerOptions;
 
@@ -72,29 +72,11 @@ export class PostgresSyncer {
   constructor() {}
 
   async syncWithUrl(
-    url: URL,
+    connectable: Connectable,
     schemaName: string,
     options: SyncOptions
   ): Promise<SyncResult> {
-    // we don't want to allow localhost access for hosted sync instances
-    // to prevent users from connecting to our hosted db
-    // (even though all our dbs should should be password protected)
-    const isLocalhost =
-      url.hostname === "localhost" ||
-      // ipv4 localhost
-      /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(url.hostname) ||
-      // ipv6 localhost
-      url.hostname === "[::1]";
-    if (isLocalhost && env.HOSTED) {
-      return {
-        kind: "error",
-        type: "postgres_connection_error",
-        error: new Error(
-          "Syncing to localhost is not allowed. Run the sync server locally to access your local database"
-        ),
-      };
-    }
-    const urlString = url.toString();
+    const urlString = connectable.toString();
     let sql = this.connections.get(urlString);
     if (!sql) {
       sql = postgres(urlString);
