@@ -25,14 +25,18 @@ function testDb(): DatabaseConnector<{
     dependencies() {
       return Promise.resolve([
         {
+          sourceSchema: "public",
           sourceTable: "posts",
           sourceColumn: ["poster_id"],
+          referencedSchema: "public",
           referencedTable: "users",
           referencedColumn: ["id"],
         },
         {
+          sourceSchema: "public",
           sourceTable: "users",
           sourceColumn: null,
+          referencedSchema: null,
           referencedTable: null,
           referencedColumn: null,
         },

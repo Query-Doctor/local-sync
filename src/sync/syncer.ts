@@ -60,7 +60,7 @@ export type SyncResult =
       sampledRecords: Record<string, number>;
       notices: SyncNotice[];
       queries: RecentQueries;
-      // metadata: TableMetadata[];
+      metadata: TableMetadata[];
     }
   | PostgresConnectionError
   | PostgresError
@@ -199,7 +199,7 @@ export class PostgresSyncer {
       notices,
       queries,
       setup: wrapped,
-      metadata: serializedResult.serialized,
+      metadata: serializedResult.schema,
     };
   }
 
