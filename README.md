@@ -9,5 +9,29 @@ https://sync.querydoctor.com/postgres/all?db=postgres://user:password@host:port/
 
 ## Setup
 
+This runs a deno server on port 2345.
+
 - [Install deno](https://docs.deno.com/runtime/getting_started/installation/)
-- `PG_DUMP_BINARY=$(which pg_dump) deno run`
+- `deno run dev`
+
+Or if you're a docker type of fella:
+
+- `docker run -t -p 2345:2345 ghcr.io/query-doctor/sync:latest`
+
+## API
+
+OpenAPI spec coming later.
+
+`POST /postgres/all`
+
+```json
+{
+  "db": "postgres://user:password@host:port/database",
+  "schema": "public",
+  "maxRows": 15,
+  "requiredRows": 5,
+  "seed": 0
+}
+```
+
+<sub>Right now only public schema is supported</sub>
