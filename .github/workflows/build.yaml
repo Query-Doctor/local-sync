@@ -69,6 +69,7 @@ jobs:
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
       - name: Attest
         uses: actions/attest-build-provenance@v2
+        if: ${{ github.event_name == 'push' }}
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
