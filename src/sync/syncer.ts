@@ -7,7 +7,7 @@ import {
 } from "./dependency-tree.ts";
 import {
   PostgresConnector,
-  RecentQuery,
+  RecentQueriesResult,
   type TableMetadata,
 } from "./pg-connector.ts";
 import { PostgresSchemaLink } from "./schema.ts";
@@ -17,7 +17,7 @@ import { Connectable } from "./connectable.ts";
 
 type SyncOptions = DependencyAnalyzerOptions;
 
-type PostgresConnectionError = {
+export type PostgresConnectionError = {
   kind: "error";
   type: "postgres_connection_error";
   error: Error;
@@ -36,22 +36,6 @@ type PostgresSuperuserError = {
 
 export type SyncNotice = DependencyResolutionNotice | PostgresSuperuserError;
 
-type RecentQueries =
-  | {
-      kind: "ok";
-      results: RecentQuery[];
-    }
-  | {
-      kind: "error";
-      type: "postgres_error";
-      error: string;
-    }
-  | {
-      kind: "error";
-      type: "extension_not_installed";
-      extensionName: string;
-    };
-
 export type SyncResult =
   | {
       kind: "ok";
@@ -60,7 +44,7 @@ export type SyncResult =
       setup: string;
       sampledRecords: Record<string, number>;
       notices: SyncNotice[];
-      queries: RecentQueries;
+      queries: RecentQueriesResult;
       metadata: TableMetadata[];
     }
   | PostgresConnectionError
@@ -165,28 +149,37 @@ export class PostgresSyncer {
 
     const wrapped = schema + serializedResult.serialized;
 
-    let queries: RecentQueries;
-    if (recentQueries.kind === "ok") {
-      queries = {
-        kind: "ok",
-        results: recentQueries.queries,
-      };
-    } else {
-      queries = recentQueries;
-    }
     return {
       kind: "ok",
       versionNum: databaseInfo.serverVersionNum,
       version: databaseInfo.serverVersion,
       sampledRecords: serializedResult.sampledRecords,
       notices,
-      queries,
+      queries: recentQueries,
       setup: wrapped,
       metadata: serializedResult.schema,
     };
   }
 
+  liveQuery(
+    connectable: Connectable
+  ): Promise<RecentQueriesResult | PostgresConnectionError> {
+    const sql = this.getConnection(connectable);
+    const connector = new PostgresConnector(sql);
+    return connector.getRecentQueries();
+  }
+
   private async checkConnection(sql: postgres.Sql) {
     await sql`select 1`;
+  }
+
+  private getConnection(connectable: Connectable) {
+    const urlString = connectable.toString();
+    let sql = this.connections.get(urlString);
+    if (!sql) {
+      sql = postgres(urlString);
+      this.connections.set(urlString, sql);
+    }
+    return sql;
   }
 }
