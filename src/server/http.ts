@@ -2,7 +2,7 @@ import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { PostgresSyncer } from "../sync/syncer.ts";
 import { log } from "../log.ts";
 import * as limiter from "./rate-limit.ts";
-import { SyncRequest } from "./sync.dto.ts";
+import { LiveQueryRequest, SyncRequest } from "./sync.dto.ts";
 import { ZodError } from "zod/v4";
 import { shutdownController } from "../shutdown.ts";
 import { env } from "../env.ts";
@@ -157,6 +157,30 @@ async function onSync(req: Request) {
   return Response.json(result, { status: 200 });
 }
 
+async function onSyncLiveQuery(req: Request) {
+  let body: LiveQueryRequest;
+  try {
+    body = LiveQueryRequest.parse(await req.json());
+  } catch (e: unknown) {
+    if (e instanceof ZodError) {
+      return Response.json(
+        {
+          kind: "error",
+          type: "invalid_body",
+          error: e.issues.map((issue) => issue.message).join("\n"),
+        },
+        { status: 400 }
+      );
+    }
+    throw e;
+  }
+  const queries = await syncer.liveQuery(body.db);
+  if (queries.kind !== "ok") {
+    return Response.json(queries, { status: 500 });
+  }
+  return Response.json(queries, { status: 200 });
+}
+
 export function createServer(hostname: string, port: number) {
   return Deno.serve(
     { hostname, port, signal: shutdownController.signal },
@@ -164,12 +188,11 @@ export function createServer(hostname: string, port: number) {
       const url = new URL(req.url);
       log.http(req);
 
-      const limit = limiter.sync.check(url.pathname, info.remoteAddr.hostname);
-      if (limit.limited) {
-        return limiter.appendHeaders(
-          new Response("Rate limit exceeded", { status: 429 }),
-          limit
-        );
+      if (req.method === "OPTIONS") {
+        return new Response("OK", {
+          status: 200,
+          headers: corsHeaders,
+        });
       }
       if (url.pathname === "/") {
         return Response.redirect(
@@ -177,22 +200,32 @@ export function createServer(hostname: string, port: number) {
           307
         );
       }
-      if (url.pathname === "/postgres/all") {
-        if (req.method === "OPTIONS") {
-          return new Response("OK", {
-            status: 200,
-            headers: corsHeaders,
-          });
-        }
-        if (req.method !== "POST") {
-          return new Response("Method not allowed", { status: 405 });
-        }
-        const res = await onSync(req);
+      const limit = limiter.sync.check(url.pathname, info.remoteAddr.hostname);
+      if (limit.limited) {
+        return limiter.appendHeaders(
+          new Response("Rate limit exceeded", { status: 429 }),
+          limit
+        );
+      }
+      function handleResponse(res: Response) {
         for (const [key, value] of Object.entries(corsHeaders)) {
           res.headers.set(key, value);
         }
         limiter.appendHeaders(res, limit);
         return res;
+      }
+      if (url.pathname === "/postgres/all") {
+        if (req.method !== "POST") {
+          return new Response("Method not allowed", { status: 405 });
+        }
+        const res = await onSync(req);
+        return handleResponse(res);
+      } else if (url.pathname === "/postgres/live") {
+        if (req.method !== "POST") {
+          return new Response("Method not allowed", { status: 405 });
+        }
+        const res = await onSyncLiveQuery(req);
+        return handleResponse(res);
       }
       return new Response("Not found", { status: 404 });
     }
