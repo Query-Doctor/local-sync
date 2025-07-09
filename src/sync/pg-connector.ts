@@ -32,6 +32,7 @@ export type ColumnMetadata = {
 };
 export type TableMetadata = {
   tableName: string;
+  schemaName: string;
   rowCountEstimate: number;
   pageCount: number;
   columns: ColumnMetadata[];
@@ -145,6 +146,8 @@ LEFT JOIN LATERAL (
         ON ref_ns.oid = ref_cl.relnamespace
     WHERE
         pc.contype = 'f' -- 'f' stands for foreign key
+        AND pa.attnum > 0 -- Skip system columns
+        AND pa.attisdropped = false -- Skip dropped columns
         AND pgn.nspname = ${schema}
         AND pgc.relname = pg_tables.tablename
     GROUP BY
@@ -263,12 +266,15 @@ ORDER BY
     options: DependencyAnalyzerOptions
   ): Promise<SerializeResult> {
     const schema = await this.getSchema(schemaName);
-    const mkKey = (table: string, column: string) =>
-      `${table.toLowerCase()}:${column}`;
+    const mkKey = (schema: string, table: string, column: string) =>
+      `${schema.toLowerCase()}:${table.toLowerCase()}:${column}`;
     const schemaMap = new Map<string, ColumnMetadata>();
     for (const table of schema) {
       for (const column of table.columns) {
-        schemaMap.set(mkKey(table.tableName, column.columnName), column);
+        schemaMap.set(
+          mkKey(table.schemaName, table.tableName, column.columnName),
+          column
+        );
       }
     }
     const comments = [
@@ -297,7 +303,9 @@ ORDER BY
 
     // TODO: batch this into a single query
     for (const [table, rows] of Object.entries(tables)) {
-      const tableSchema = schema.find((s) => s.tableName === table);
+      const tableSchema = schema.find(
+        (s) => s.tableName === table && s.schemaName === schemaName
+      );
       const allCtids = rows.map((row) => row[ctidSymbol]);
       if (!tableSchema) {
         console.warn(`No schema found for ${table}. Skipping.`);
@@ -368,6 +376,7 @@ ORDER BY
     const results = await this.sql<TableMetadata[]>`
       SELECT
           c.table_name as "tableName",
+          n.nspname as "schemaName",
           cl.reltuples as "rowCountEstimate",
           cl.relpages as "pageCount",
           json_agg(
@@ -384,25 +393,35 @@ ORDER BY
                   'histogramBounds', s.histogram_bounds
                 )
                   from pg_stats s
-                where s.schemaname = ${schemaName}
+                where 
+                  s.schemaname = n.nspname
                   and s.tablename = c.table_name
                   and s.attname = c.column_name
+                  -- Skip dropped columns (they still exist in the schema)
+                  and a.attisdropped = false
+                  -- Skip system columns
+                  and a.attnum > 0
               )
             )
           ORDER BY c.ordinal_position) as columns
       FROM
           information_schema.columns c
       JOIN
-          pg_class cl
-          ON cl.relname = c.table_name
-      JOIN
           pg_namespace n
-          ON n.oid = cl.relnamespace
+          ON n.nspname = c.table_schema
+      JOIN
+          pg_class cl
+          ON cl.relname = c.table_name and cl.relnamespace = n.oid
+      JOIN
+          pg_attribute a
+          ON a.attrelid = (quote_ident(c.table_schema) || '.' || quote_ident(c.table_name))::regclass
+          AND a.attname = c.column_name
       WHERE
-          c.table_schema = ${schemaName}
+          n.nspname = ${schemaName}
+          and c.table_name not like 'pg_%'
           and c.table_name not in ('pg_stat_statements', 'pg_stat_statements_info')
       GROUP BY
-          c.table_name, cl.reltuples, cl.relpages; -- @qd_introspection
+          n.nspname, c.table_name, cl.reltuples, cl.relpages; -- @qd_introspection
     `;
     return results;
   }
