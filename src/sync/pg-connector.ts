@@ -10,6 +10,7 @@ import type {
 import { log } from "../log.ts";
 import { trace } from "@opentelemetry/api";
 import { shutdownController } from "../shutdown.ts";
+import { withSpan } from "../otel.ts";
 
 const ctidSymbol = Symbol("ctid");
 type Row = NonNullable<postgres.Row & Iterable<postgres.Row>> & {
@@ -102,7 +103,10 @@ export class PostgresConnector implements DatabaseConnector<PostgresTuple> {
    * The table and column names are quoted according to postgres rules
    */
   async dependencies(schema: string) {
-    const out = await this.sql<Dependency[]>`
+    const out = await withSpan(
+      "connector.dependencies",
+      () =>
+        this.sql<Dependency[]>`
 SELECT
     quote_ident(pg_tables.schemaname)  as "sourceSchema",
     quote_ident(pg_tables.tablename) AS "sourceTable",
@@ -159,7 +163,8 @@ WHERE
     pg_tables.schemaname = ${schema}
 ORDER BY
     pg_tables.tablename, fk."referencedTable", fk."sourceColumn";-- @qd_introspection
-    `;
+    `
+    )();
 
     return out;
   }
@@ -171,15 +176,10 @@ ORDER BY
     // TODO: pass the schema along
     const sqlString = `select *, ctid from ${schema}.${table} where ${columnsText} limit 1 -- @qd_introspection`;
     const params = Object.values(values);
-    const span = trace.getActiveSpan();
-    const start = Date.now();
     log.debug(`${sqlString} : [${params.join(", ")}]`, "pg-connector:get");
-    const data = await this.sql.unsafe(
-      sqlString,
-      params as postgres.ParameterOrJSON<never>[]
-    );
-    const end = Date.now();
-    span?.addEvent("get", end, start);
+    const data = await withSpan("connector.get", () =>
+      this.sql.unsafe(sqlString, params as postgres.ParameterOrJSON<never>[])
+    )();
     if (data.length === 0) {
       return;
     }
@@ -324,7 +324,9 @@ ORDER BY
         `${query} : [${allCtids.join(", ")}]`,
         "pg-connector:serialize"
       );
-      const serialized = await this.sql.unsafe(query, [allCtids]);
+      const serialized = await withSpan("connector.get", () =>
+        this.sql.unsafe(query, [allCtids])
+      )();
 
       const estimate = this.tupleEstimates.get(table) ?? "?";
       const comment = `-- ${table} | ${
@@ -373,7 +375,10 @@ ORDER BY
   }
 
   public async getSchema(schemaName: string): Promise<TableMetadata[]> {
-    const results = await this.sql<TableMetadata[]>`
+    const results = await withSpan(
+      "connector.getSchema",
+      () =>
+        this.sql<TableMetadata[]>`
       SELECT
           c.table_name as "tableName",
           n.nspname as "schemaName",
@@ -422,7 +427,8 @@ ORDER BY
           and c.table_name not in ('pg_stat_statements', 'pg_stat_statements_info')
       GROUP BY
           n.nspname, c.table_name, cl.reltuples, cl.relpages; -- @qd_introspection
-    `;
+    `
+    )();
     return results;
   }
 

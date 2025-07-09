@@ -1,4 +1,6 @@
+import { trace } from "@opentelemetry/api";
 import { log } from "../log.ts";
+import { withSpan } from "../otel.ts";
 
 export type Dependency =
   // a source table with dependencies
@@ -200,7 +202,9 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
           if (!cursor) {
             throw new Error(`Cursor for ${table} not found`);
           }
+          const span = trace.getActiveSpan();
           const iterator = await cursor.next();
+          span?.addEvent("cursor.next");
 
           if (iterator.done) {
             log.debug(
@@ -358,22 +362,24 @@ export class DependencyAnalyzer<T extends InsertableTuple = InsertableTuple> {
     return results;
   }
 
-  buildGraph(dependencies: Dependency[]): DependencyGraph {
-    const graph = new Map<TableName, Pointer[]>();
-    for (const dependency of dependencies) {
-      const existing = graph.get(dependency.sourceTable) ?? [];
-      if (dependency.sourceColumn) {
-        existing.push({
-          sourceSchema: dependency.sourceSchema,
-          sourceColumn: dependency.sourceColumn,
-          referencedSchema: dependency.referencedSchema,
-          referencedTable: dependency.referencedTable,
-          referencedColumn: dependency.referencedColumn,
-        });
+  buildGraph(dependencies: Dependency[]): Promise<DependencyGraph> {
+    return withSpan("buildGraph", () => {
+      const graph = new Map<TableName, Pointer[]>();
+      for (const dependency of dependencies) {
+        const existing = graph.get(dependency.sourceTable) ?? [];
+        if (dependency.sourceColumn) {
+          existing.push({
+            sourceSchema: dependency.sourceSchema,
+            sourceColumn: dependency.sourceColumn,
+            referencedSchema: dependency.referencedSchema,
+            referencedTable: dependency.referencedTable,
+            referencedColumn: dependency.referencedColumn,
+          });
+        }
+        graph.set(dependency.sourceTable, existing);
       }
-      graph.set(dependency.sourceTable, existing);
-    }
-    return graph;
+      return graph;
+    })();
   }
 }
 

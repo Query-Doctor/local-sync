@@ -63,25 +63,8 @@ export class PostgresSyncer {
     const urlString = connectable.toString();
     let sql = this.connections.get(urlString);
     if (!sql) {
-      sql = postgres(urlString);
+      sql = postgres(urlString, { max: 50 });
       this.connections.set(urlString, sql);
-    }
-    try {
-      await this.checkConnection(sql);
-    } catch (err) {
-      // dual stack networking (ipv4/ipv6) really screws us here because
-      // it throws an AggregateError which is annoying to catch
-      const error =
-        err instanceof AggregateError
-          ? (err.errors[0] as Error)
-          : err instanceof Error
-          ? err
-          : new Error("Unknown error");
-      return {
-        kind: "error",
-        type: "postgres_connection_error",
-        error,
-      };
     }
     const connector = new PostgresConnector(sql);
     const link = new PostgresSchemaLink(urlString, schemaName);
@@ -90,8 +73,6 @@ export class PostgresSyncer {
     // simultaneously with `link.syncSchema` because pg_dump changes `search_path` which
     // causes inconsistent results when querying regclasses. They get prefixed with
     // the current search_path which can cause race conditions when pg_dump sets it to ''
-    const dependencyList = await connector.dependencies(schemaName);
-    const graph = analyzer.buildGraph(dependencyList);
     const [
       databaseInfo,
       recentQueries,
@@ -105,10 +86,12 @@ export class PostgresSyncer {
       withSpan("getRecentQueries", () => {
         return connector.getRecentQueries();
       })(),
-      withSpan("syncSchema", () => {
+      withSpan("pg_dump", () => {
         return link.syncSchema(schemaName);
       })(),
       withSpan("resolveDependencies", async (span) => {
+        const dependencyList = await connector.dependencies(schemaName);
+        const graph = await analyzer.buildGraph(dependencyList);
         span.setAttribute("schemaName", schemaName);
         const deps = await analyzer.findAllDependencies(schemaName, graph);
         if (deps.kind !== "ok") {
@@ -169,8 +152,10 @@ export class PostgresSyncer {
     return connector.getRecentQueries();
   }
 
-  private async checkConnection(sql: postgres.Sql) {
-    await sql`select 1`;
+  private checkConnection(sql: postgres.Sql) {
+    return withSpan("checkConnection", async () => {
+      await sql`select 1`;
+    })();
   }
 
   private getConnection(connectable: Connectable) {

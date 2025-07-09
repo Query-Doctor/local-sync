@@ -2,6 +2,7 @@ import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { log } from "../log.ts";
 import { shutdownController } from "../shutdown.ts";
 import { env } from "../env.ts";
+import { withSpan } from "../otel.ts";
 
 export type TableStats = {
   name: string;
@@ -64,19 +65,26 @@ export class PostgresSchemaLink {
     const span = trace.getActiveSpan();
     const decoder = new TextDecoder();
     span?.setAttribute("outputBytes", output.stdout.byteLength);
-    const stderr =
-      output.stderr.byteLength > 0 ? decoder.decode(output.stderr) : undefined;
-    if (stderr) {
-      console.warn(stderr);
-    }
-    if (output.code !== 0) {
-      span?.setStatus({ code: SpanStatusCode.ERROR, message: stderr });
-      log.error(`Error: ${stderr}`, "schema:sync");
-      throw new Error(stderr);
-    }
-    log.info(`Dumped schema. bytes=${output.stdout.byteLength}`, "schema:sync");
-    const stdout = decoder.decode(output.stdout);
-    return this.sanitizeSchema(stdout);
+    return withSpan("decodeResponse", () => {
+      const stderr =
+        output.stderr.byteLength > 0
+          ? decoder.decode(output.stderr)
+          : undefined;
+      if (stderr) {
+        console.warn(stderr);
+      }
+      if (output.code !== 0) {
+        span?.setStatus({ code: SpanStatusCode.ERROR, message: stderr });
+        log.error(`Error: ${stderr}`, "schema:sync");
+        throw new Error(stderr);
+      }
+      log.info(
+        `Dumped schema. bytes=${output.stdout.byteLength}`,
+        "schema:sync"
+      );
+      const stdout = decoder.decode(output.stdout);
+      return this.sanitizeSchema(stdout);
+    })();
   }
 
   private sanitizeSchema(schema: string): string {
