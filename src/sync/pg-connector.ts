@@ -51,13 +51,17 @@ export type SerializeResult = {
   sampledRecords: Record<TableName, number>;
 };
 
-export type RecentQuery = {
+export type RawRecentQuery = {
   username: string;
   query: string;
   meanTime: number;
   calls: string;
   rows: string;
   topLevel: boolean;
+};
+
+export type RecentQuery = RawRecentQuery & {
+  firstSeen: number;
 };
 
 export type RecentQueriesError =
@@ -75,7 +79,7 @@ export type RecentQueriesError =
 export type RecentQueriesResult =
   | {
       kind: "ok";
-      queries: RecentQuery[];
+      queries: RawRecentQuery[];
     }
   | RecentQueriesError;
 
@@ -449,7 +453,7 @@ ORDER BY
 
   public async getRecentQueries(): Promise<RecentQueriesResult> {
     try {
-      const results = await this.sql<RecentQuery[]>`
+      const results = await this.sql<RawRecentQuery[]>`
       SELECT
         pg_user.usename as "username",
         query,
