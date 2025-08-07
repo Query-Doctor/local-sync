@@ -14,6 +14,7 @@ import { PostgresSchemaLink } from "./schema.ts";
 import { withSpan } from "../otel.ts";
 import { SpanStatusCode } from "@opentelemetry/api";
 import { Connectable } from "./connectable.ts";
+import { queryCache } from "../query-cache.ts";
 
 type SyncOptions = DependencyAnalyzerOptions;
 
@@ -113,6 +114,10 @@ export class PostgresSyncer {
       })(),
     ]);
 
+    if (recentQueries.kind === "ok") {
+      recentQueries.queries = queryCache.sync(urlString, recentQueries.queries);
+    }
+
     if (dependencies.kind !== "ok") {
       return dependencies;
     }
@@ -144,12 +149,28 @@ export class PostgresSyncer {
     };
   }
 
-  liveQuery(
+  async liveQuery(
     connectable: Connectable
   ): Promise<RecentQueriesResult | PostgresConnectionError> {
-    const sql = this.getConnection(connectable);
-    const connector = new PostgresConnector(sql);
-    return connector.getRecentQueries();
+    try {
+      const urlString = connectable.toString();
+      const sql = this.getConnection(connectable);
+      const connector = new PostgresConnector(sql);
+
+      const queries = await connector.getRecentQueries();
+
+      if (queries.kind === "ok") {
+        queries.queries = queryCache.sync(urlString, queries.queries);
+      }
+
+      return queries;
+    } catch (error) {
+      return {
+        kind: "error",
+        type: "postgres_connection_error",
+        error: error instanceof Error ? error : new Error(String(error)),
+      };
+    }
   }
 
   private checkConnection(sql: postgres.Sql) {
